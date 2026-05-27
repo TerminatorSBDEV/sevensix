@@ -1,685 +1,165 @@
---- START OF FILE Paste May 13, 2026 - 12:34PM ---
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Web3D Shooter</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Termux Tic-Tac-Toe</title>
     <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #111; font-family: monospace; user-select: none; -webkit-user-select: none; touch-action: none; }
-        #game-canvas { display: none; width: 100%; height: 100%; }
-        
-        .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.8); z-index: 100; color: #fff; }
-        .hidden { display: none !important; }
-        input { padding: 10px; font-size: 16px; background: #222; color: #0f0; border: 1px solid #0f0; margin-bottom: 10px; text-align: center; outline: none; }
-        button { padding: 10px 20px; font-size: 16px; background: #0f0; color: #000; border: none; cursor: pointer; margin: 5px; font-weight: bold; }
-        button:hover { background: #0a0; }
-        
-        #hud { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: none; z-index: 50; }
-        #crosshair { position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; background: white; border-radius: 50%; transform: translate(-50%, -50%); }
-        #stats { position: absolute; bottom: 20px; right: 20px; color: #0f0; font-size: 24px; text-align: right; text-shadow: 1px 1px 0 #000; }
-        #timer { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); color: #fff; font-size: 20px; text-shadow: 1px 1px 0 #000; }
-        #health-bar { position: absolute; bottom: 20px; left: 20px; width: 200px; height: 20px; background: #500; border: 2px solid #000; }
-        #health-fill { width: 100%; height: 100%; background: #f00; transition: width 0.2s; }
-        
-        #mobile-controls { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: none; z-index: 60; }
-        .joystick-zone { position: absolute; bottom: 20px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border-radius: 50%; pointer-events: auto; }
-        #joy-left { left: 20px; }
-        .joy-stick { position: absolute; top: 50%; left: 50%; width: 50px; height: 50px; background: rgba(255,255,255,0.5); border-radius: 50%; transform: translate(-50%, -50%); }
-        .action-btn { position: absolute; width: 60px; height: 60px; background: rgba(0,255,0,0.3); border-radius: 50%; pointer-events: auto; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px; }
-        #btn-jump { bottom: 160px; right: 40px; }
-        #btn-reload { bottom: 100px; right: 40px; }
-        #btn-shoot { bottom: 230px; right: 40px; background: rgba(255,0,0,0.3); }
-        #btn-sprint { bottom: 100px; left: 160px; background: rgba(255,255,255,0.2); }
-
-        .top-btns { position: absolute; top: 20px; right: 20px; pointer-events: auto; z-index: 55; display: flex; gap: 5px; }
-        .small-btn { background: #333; color: white; padding: 5px 10px; font-size: 12px; border: none; cursor: pointer; }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: sans-serif;
+        }
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: #121212;
+            color: #ffffff;
+            overflow: hidden;
+        }
+        #status {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: bold;
+            min-height: 2rem;
+        }
+        #board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 10px;
+            width: 90vw;
+            height: 90vw;
+            max-width: 400px;
+            max-height: 400px;
+        }
+        .cell {
+            background-color: #1e1e1e;
+            border: 2px solid #333;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            font-weight: bold;
+            cursor: pointer;
+            /* Prevents zoom/double-tap delays on mobile touchscreens */
+            touch-action: manipulation; 
+            -webkit-tap-highlight-color: transparent;
+        }
+        .cell:active {
+            background-color: #2a2a2a;
+        }
+        .cell.X { color: #3498db; }
+        .cell.O { color: #e74c3c; }
     </style>
 </head>
 <body>
 
-    <div id="ui-nick" class="overlay">
-        <h2>Your nickname:</h2>
-        <input type="text" id="in-nick" placeholder="Enter name" autocomplete="off">
+    <div id="status">Connecting to server...</div>
+    <div id="board">
+        <div class="cell" data-index="0"></div>
+        <div class="cell" data-index="1"></div>
+        <div class="cell" data-index="2"></div>
+        <div class="cell" data-index="3"></div>
+        <div class="cell" data-index="4"></div>
+        <div class="cell" data-index="5"></div>
+        <div class="cell" data-index="6"></div>
+        <div class="cell" data-index="7"></div>
+        <div class="cell" data-index="8"></div>
     </div>
 
-    <div id="ui-team" class="overlay hidden">
-        <h2>Join a team</h2>
-        <div>
-            <button onclick="selectTeam('Terminadores')" style="background:#ff4444">Terminadores</button>
-            <button onclick="selectTeam('Exterminadores')" style="background:#4444ff; color:white">Exterminadores</button>
-        </div>
-    </div>
+    <script>
+        // Use the secure WebSocket protocol (wss) for Cloudflare tunnels
+        const wsUrl = "wss://misc-removing-sharon-prozac.trycloudflare.com";
+        const socket = new WebSocket(wsUrl);
 
-    <div id="ui-device" class="overlay hidden">
-        <h2>Your device:</h2>
-        <div>
-            <button onclick="selectDevice('phone')">Phone</button>
-            <button onclick="selectDevice('computer')">Computer</button>
-        </div>
-    </div>
-
-    <div id="ui-chat" class="overlay hidden">
-        <h2>Chat:</h2>
-        <input type="text" id="in-chat" placeholder="Type a message..." maxlength="50">
-        <button onclick="sendChatMessage()">Send</button>
-        <button onclick="closeChat()" style="background:#444">Back</button>
-    </div>
-
-    <div id="ui-death" class="overlay hidden">
-        <h1 style="color:red">morreu noob KKKK, espera 3 segundos ae</h1>
-    </div>
-
-    <canvas id="game-canvas"></canvas>
-    
-    <div id="hud">
-        <div id="crosshair"></div>
-        <div id="timer">Map Reset: 03:00</div>
-        <div id="health-bar"><div id="health-fill"></div></div>
-        <div id="stats">
-            Ammo: <span id="ui-ammo">30</span>/∞<br>
-            <span id="ui-reloading" style="color:red;font-size:16px;display:none">RELOADING...</span>
-        </div>
-        <div class="top-btns">
-            <button class="small-btn" onclick="openChat()">Chat</button>
-            <button class="small-btn" onclick="openDeviceMenu()">Options</button>
-        </div>
-    </div>
-
-    <div id="mobile-controls">
-        <div class="joystick-zone" id="joy-left"><div class="joy-stick" id="stick-left"></div></div>
-        <div class="action-btn" id="btn-jump">JUMP</div>
-        <div class="action-btn" id="btn-reload">REL</div>
-        <div class="action-btn" id="btn-shoot">FIRE</div>
-        <div class="action-btn" id="btn-sprint">RUN</div>
-    </div>
-
-<script>
-    const TUNNEL = "https://chris-rom-laser-charms.trycloudflare.com";
-    const AUTH_KEY = "QiGRbLYMV";
-    const socket = io(TUNNEL, { auth: { token: AUTH_KEY } });
-
-    let myName = "";
-    let myTeam = "";
-    let deviceType = "computer";
-    let myId = Math.random().toString(36).substr(2, 9);
-    let isHost = false;
-    let players = {};
-    let mapData = [];
-    let serverStartTime = 0;
-    
-    const MAX_HEALTH = 100;
-    let health = MAX_HEALTH;
-    let ammo = 30;
-    let isReloading = false;
-    let lastShotTime = 0;
-    let isDead = false;
-    let afkTimer = Date.now();
-
-    let scene, camera, renderer, clock;
-    let worldObjects = []; // Stores meshes for cleanup
-    let collisionBoxes = []; // Stores boxes for physics
-    let bullets = [];
-    let myMesh, myGun, myChatBubble;
-    
-    let pitchObject = new THREE.Object3D();
-    let yawObject = new THREE.Object3D();
-    let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, isSprinting = false;
-    let jumpActive = false, shootActive = false;
-    let velocity = new THREE.Vector3();
-    let direction = new THREE.Vector3();
-    let canJump = false;
-    let playerBox = new THREE.Box3();
-    
-    let joyLeftData = { x: 0, y: 0 };
-    let rotationTouchId = null;
-    let lastTouchX = 0;
-    let lastTouchY = 0;
-
-    document.getElementById('in-nick').addEventListener('keypress', (e) => {
-        if(e.key === 'Enter' && e.target.value.trim() !== '') {
-            myName = e.target.value.trim();
-            document.getElementById('ui-nick').classList.add('hidden');
-            document.getElementById('ui-team').classList.remove('hidden');
-        }
-    });
-
-    function selectTeam(team) {
-        myTeam = team;
-        document.getElementById('ui-team').classList.add('hidden');
-        document.getElementById('ui-device').classList.remove('hidden');
-    }
-
-    function selectDevice(dev) {
-        deviceType = dev;
-        document.getElementById('ui-device').classList.add('hidden');
-        startGame();
-    }
-
-    function openDeviceMenu() {
-        document.getElementById('ui-device').classList.remove('hidden');
-        if(deviceType === 'computer') document.exitPointerLock();
-    }
-
-    function openChat() {
-        document.getElementById('ui-chat').classList.remove('hidden');
-        document.getElementById('in-chat').focus();
-        if(deviceType === 'computer') document.exitPointerLock();
-    }
-
-    function closeChat() {
-        document.getElementById('ui-chat').classList.add('hidden');
-        if(deviceType === 'computer' && !isDead) document.getElementById('game-canvas').requestPointerLock();
-    }
-
-    function sendChatMessage() {
-        const msg = document.getElementById('in-chat').value.trim();
-        if(msg !== "") {
-            socket.emit('RemoteEvent', { type: 'chat', id: myId, text: msg });
-            showChatBubble(myId, msg);
-            document.getElementById('in-chat').value = "";
-        }
-        closeChat();
-    }
-
-    function startGame() {
-        document.getElementById('game-canvas').style.display = 'block';
-        document.getElementById('hud').style.display = 'block';
+        const statusDisplay = document.getElementById('status');
+        const cells = document.querySelectorAll('.cell');
         
-        if(deviceType === 'phone') {
-            document.getElementById('mobile-controls').style.display = 'block';
-            setupMobileControls();
-        } else {
-            document.getElementById('mobile-controls').style.display = 'none';
-            setupComputerControls();
-        }
+        let playerSymbol = null;
+        let isMyTurn = false;
 
-        if(!scene) init3D();
-        socket.emit('RemoteEvent', { type: 'req_map', id: myId });
-        
-        setTimeout(() => {
-            if(mapData.length === 0) {
-                isHost = true;
-                generateMap();
-                serverStartTime = Date.now();
-                socket.emit('RemoteEvent', { type: 'map_data', map: mapData, time: serverStartTime });
+        socket.onopen = () => {
+            statusDisplay.innerText = "Connected! Waiting for opponent...";
+        };
+
+        socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+            if (data.type === 'init') {
+                playerSymbol = data.symbol;
+                statusDisplay.innerText = `You are Player ${playerSymbol}. Waiting for match...`;
             }
-        }, 1000);
 
-        respawn();
-        updateHUD();
-    }
+            if (data.type === 'start') {
+                isMyTurn = data.turn === playerSymbol;
+                statusDisplay.innerText = isMyTurn ? "Your turn!" : "Opponent's turn...";
+                updateBoard(data.board);
+            }
 
-    function init3D() {
-        const canvas = document.getElementById('game-canvas');
-        renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: false });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        
-        scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87CEEB);
-        scene.fog = new THREE.Fog(0x87CEEB, 0, 150);
+            if (data.type === 'update') {
+                isMyTurn = data.turn === playerSymbol;
+                statusDisplay.innerText = isMyTurn ? "Your turn!" : "Opponent's turn...";
+                updateBoard(data.board);
+            }
 
-        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        
-        pitchObject.add(camera);
-        yawObject.add(pitchObject);
-        yawObject.position.y = 2;
-        scene.add(yawObject);
+            if (data.type === 'gameover') {
+                updateBoard(data.board);
+                if (data.winner === 'Draw') {
+                    statusDisplay.innerText = "It's a Draw! Refresh to play again.";
+                } else {
+                    statusDisplay.innerText = data.winner === playerSymbol ? "You Win!" : "You Lose!";
+                }
+                isMyTurn = false;
+                socket.close();
+            }
 
-        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
-        hemiLight.position.set(0, 200, 0);
-        scene.add(hemiLight);
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        dirLight.position.set(100, 200, 50);
-        scene.add(dirLight);
+            if (data.type === 'opponent_disconnected') {
+                statusDisplay.innerText = "Opponent disconnected. Refresh to restart.";
+                isMyTurn = false;
+            }
+        };
 
-        const floorGeo = new THREE.PlaneGeometry(500, 500);
-        const floorMat = new THREE.MeshLambertMaterial({ color: 0x3d8c40 });
-        const floor = new THREE.Mesh(floorGeo, floorMat);
-        floor.rotation.x = -Math.PI / 2;
-        scene.add(floor);
+        socket.onerror = (error) => {
+            statusDisplay.innerText = "Connection error.";
+            console.error(error);
+        };
 
-        const gunGeo = new THREE.BoxGeometry(0.1, 0.1, 0.5);
-        const gunMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
-        myGun = new THREE.Mesh(gunGeo, gunMat);
-        myGun.position.set(0.3, -0.3, -0.5);
-        camera.add(myGun);
+        socket.onclose = () => {
+            if (statusDisplay.innerText !== "Opponent disconnected. Refresh to restart." && !statusDisplay.innerText.includes("Win")) {
+                statusDisplay.innerText = "Disconnected from server.";
+            }
+        };
 
-        clock = new THREE.Clock();
-        setInterval(sendSync, 50); // Target 50ms ping feel
-        animate();
-    }
-
-    function generateMap() {
-        mapData = [];
-        for(let i=0; i<30; i++) {
-            mapData.push({
-                type: 'house',
-                x: (Math.random() - 0.5) * 200,
-                z: (Math.random() - 0.5) * 200,
-                w: 10 + Math.random() * 10,
-                h: 8,
-                d: 10 + Math.random() * 10
+        function updateBoard(boardState) {
+            cells.forEach((cell, index) => {
+                cell.innerText = boardState[index];
+                cell.className = `cell ${boardState[index]}`;
             });
         }
-        for(let i=0; i<50; i++) {
-            mapData.push({
-                type: 'tree',
-                x: (Math.random() - 0.5) * 250,
-                z: (Math.random() - 0.5) * 250
+
+        // Handle touchscreen taps / clicks
+        cells.forEach(cell => {
+            cell.addEventListener('click', () => {
+                const index = cell.getAttribute('data-index');
+                
+                if (!isMyTurn || cell.innerText !== '') {
+                    return; 
+                }
+
+                // Send the move to the server
+                socket.send(JSON.stringify({
+                    type: 'move',
+                    index: parseInt(index)
+                }));
             });
-        }
-        buildMapFromData();
-    }
-
-    function buildMapFromData() {
-        // Clear existing
-        worldObjects.forEach(obj => scene.remove(obj));
-        worldObjects = [];
-        collisionBoxes = [];
-
-        const houseMat = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
-        const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5D4037 });
-        const leafMat = new THREE.MeshLambertMaterial({ color: 0x2E7D32 });
-
-        mapData.forEach(data => {
-            if(data.type === 'house') {
-                const geo = new THREE.BoxGeometry(data.w, data.h, data.d);
-                const mesh = new THREE.Mesh(geo, houseMat);
-                mesh.position.set(data.x, data.h/2, data.z);
-                scene.add(mesh);
-                worldObjects.push(mesh);
-                collisionBoxes.push(new THREE.Box3().setFromObject(mesh));
-            } else if (data.type === 'tree') {
-                const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 4), trunkMat);
-                trunk.position.set(data.x, 2, data.z);
-                const leaves = new THREE.Mesh(new THREE.ConeGeometry(3, 6), leafMat);
-                leaves.position.set(data.x, 7, data.z);
-                scene.add(trunk); scene.add(leaves);
-                worldObjects.push(trunk, leaves);
-                collisionBoxes.push(new THREE.Box3().setFromObject(trunk));
-            }
         });
-    }
-
-    function setupComputerControls() {
-        const canvas = document.getElementById('game-canvas');
-        canvas.addEventListener('click', () => {
-            if(!isDead && deviceType === 'computer' && document.getElementById('ui-chat').classList.contains('hidden')) {
-                canvas.requestPointerLock();
-            }
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (document.pointerLockElement === canvas) {
-                afkTimer = Date.now();
-                yawObject.rotation.y -= e.movementX * 0.002;
-                pitchObject.rotation.x -= e.movementY * 0.002;
-                pitchObject.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitchObject.rotation.x));
-            }
-        });
-
-        document.addEventListener('mousedown', (e) => { if(e.button === 0) shootActive = true; afkTimer = Date.now(); });
-        document.addEventListener('mouseup', (e) => { if(e.button === 0) shootActive = false; });
-
-        document.addEventListener('keydown', (e) => {
-            afkTimer = Date.now();
-            switch(e.code) {
-                case 'KeyW': moveForward = true; break;
-                case 'KeyS': moveBackward = true; break;
-                case 'KeyA': moveLeft = true; break;
-                case 'KeyD': moveRight = true; break;
-                case 'ShiftLeft': isSprinting = true; break;
-                case 'Space': if(canJump) velocity.y += 15; canJump = false; break;
-                case 'KeyR': reloadGun(); break;
-            }
-        });
-
-        document.addEventListener('keyup', (e) => {
-            switch(e.code) {
-                case 'KeyW': moveForward = false; break;
-                case 'KeyS': moveBackward = false; break;
-                case 'KeyA': moveLeft = false; break;
-                case 'KeyD': moveRight = false; break;
-                case 'ShiftLeft': isSprinting = false; break;
-            }
-        });
-    }
-
-    function setupMobileControls() {
-        const joyLeft = document.getElementById('joy-left');
-        const stickLeft = document.getElementById('stick-left');
-        handleJoystick(joyLeft, stickLeft, (x, y) => { joyLeftData.x = x; joyLeftData.y = y; afkTimer = Date.now(); });
-        
-        document.addEventListener('touchstart', (e) => {
-            for(let i=0; i<e.changedTouches.length; i++) {
-                const touch = e.changedTouches[i];
-                if(!e.target.closest('.joystick-zone') && !e.target.closest('.action-btn') && !e.target.closest('.top-btns') && rotationTouchId === null) {
-                    rotationTouchId = touch.identifier;
-                    lastTouchX = touch.pageX; lastTouchY = touch.pageY;
-                }
-            }
-        }, {passive: false});
-
-        document.addEventListener('touchmove', (e) => {
-            for(let i=0; i<e.changedTouches.length; i++) {
-                const touch = e.changedTouches[i];
-                if(touch.identifier === rotationTouchId) {
-                    let dx = touch.pageX - lastTouchX;
-                    let dy = touch.pageY - lastTouchY;
-                    yawObject.rotation.y -= dx * 0.006;
-                    pitchObject.rotation.x -= dy * 0.006;
-                    pitchObject.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitchObject.rotation.x));
-                    lastTouchX = touch.pageX; lastTouchY = touch.pageY;
-                    afkTimer = Date.now();
-                }
-            }
-        }, {passive: false});
-
-        document.addEventListener('touchend', (e) => {
-            for(let i=0; i<e.changedTouches.length; i++) {
-                if(e.changedTouches[i].identifier === rotationTouchId) rotationTouchId = null;
-            }
-        });
-
-        bindTouch('btn-jump', () => { if(canJump) velocity.y += 15; canJump = false; afkTimer = Date.now(); });
-        bindTouch('btn-reload', () => { reloadGun(); afkTimer = Date.now(); });
-        
-        const btnSprint = document.getElementById('btn-sprint');
-        btnSprint.addEventListener('touchstart', (e) => { e.preventDefault(); isSprinting = true; }, {passive:false});
-        btnSprint.addEventListener('touchend', (e) => { e.preventDefault(); isSprinting = false; }, {passive:false});
-
-        const btnShoot = document.getElementById('btn-shoot');
-        btnShoot.addEventListener('touchstart', (e) => { e.preventDefault(); shootActive = true; afkTimer = Date.now(); }, {passive:false});
-        btnShoot.addEventListener('touchend', (e) => { e.preventDefault(); shootActive = false; }, {passive:false});
-    }
-
-    function handleJoystick(zone, stick, callback) {
-        let maxR = 40, activeId = null, centerX, centerY;
-        zone.addEventListener('touchstart', (e) => {
-            e.preventDefault(); const touch = e.changedTouches[0]; activeId = touch.identifier;
-            let rect = zone.getBoundingClientRect(); centerX = rect.left + rect.width/2; centerY = rect.top + rect.height/2;
-            updateStick(touch);
-        }, {passive:false});
-        window.addEventListener('touchmove', (e) => {
-            if(activeId === null) return;
-            for(let i=0; i<e.changedTouches.length; i++) {
-                const touch = e.changedTouches[i];
-                if(touch.identifier === activeId) updateStick(touch);
-            }
-        }, {passive:false});
-        window.addEventListener('touchend', (e) => {
-            for(let i=0; i<e.changedTouches.length; i++) {
-                if(e.changedTouches[i].identifier === activeId) {
-                    activeId = null; stick.style.transform = `translate(-50%, -50%)`; callback(0, 0);
-                }
-            }
-        }, {passive:false});
-        function updateStick(touch) {
-            let dx = touch.clientX - centerX, dy = touch.clientY - centerY, dist = Math.sqrt(dx*dx + dy*dy);
-            if(dist > maxR) { dx = (dx/dist)*maxR; dy = (dy/dist)*maxR; }
-            stick.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-            callback(dx/maxR, dy/maxR);
-        }
-    }
-
-    function bindTouch(id, cb) {
-        document.getElementById(id).addEventListener('touchstart', (e)=>{ e.preventDefault(); cb();}, {passive:false});
-    }
-
-    function shoot() {
-        if(isDead || isReloading || ammo <= 0 || Date.now() - lastShotTime < 100) return;
-        ammo--; lastShotTime = Date.now(); updateHUD();
-        
-        // Recoil and Misprecision
-        const spread = isSprinting ? 0.08 : 0.01;
-        pitchObject.rotation.x += (isSprinting ? 0.1 : 0.05) + (Math.random() * 0.02);
-        myGun.position.z = -0.4;
-        
-        const raycaster = new THREE.Raycaster();
-        const direction = new THREE.Vector3(0, 0, -1);
-        direction.applyQuaternion(camera.quaternion);
-        // Apply spread
-        direction.x += (Math.random() - 0.5) * spread;
-        direction.y += (Math.random() - 0.5) * spread;
-        direction.normalize();
-        raycaster.set(camera.getWorldPosition(new THREE.Vector3()), direction);
-        
-        let hitPos = raycaster.ray.origin.clone().add(raycaster.ray.direction.clone().multiplyScalar(100));
-        let hitTargets = [];
-        for(let id in players) {
-            if(players[id].team !== myTeam) {
-                const intersects = raycaster.intersectObject(players[id].group, true);
-                if(intersects.length > 0) hitTargets.push({ id: id, intersect: intersects[0] });
-            }
-        }
-        
-        const worldIntersects = raycaster.intersectObjects(worldObjects);
-        if(worldIntersects.length > 0) hitPos = worldIntersects[0].point;
-
-        if(hitTargets.length > 0) {
-            hitTargets.sort((a, b) => a.intersect.distance - b.intersect.distance);
-            const hit = hitTargets[0];
-            if(worldIntersects.length === 0 || hit.intersect.distance < worldIntersects[0].distance) {
-                const isHeadshot = hit.intersect.object.name === 'head';
-                socket.emit('RemoteEvent', { type: 'damage', target: hit.id, dmg: isHeadshot ? 20 : 10, shooter: myId });
-                hitPos = hit.intersect.point;
-            }
-        }
-        
-        const startPos = new THREE.Vector3();
-        myGun.getWorldPosition(startPos);
-        createBullet(startPos, hitPos);
-        socket.emit('RemoteEvent', { type: 'shoot', id: myId, from: startPos, to: hitPos });
-    }
-
-    function createBullet(from, to) {
-        const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-        const distance = from.distanceTo(to);
-        const geometry = new THREE.CylinderGeometry(0.02, 0.02, distance, 8);
-        const bullet = new THREE.Mesh(geometry, material);
-        bullet.position.copy(from); bullet.lookAt(to); bullet.rotateX(Math.PI / 2); bullet.translateY(distance / 2);
-        scene.add(bullet);
-        bullets.push({ mesh: bullet, time: Date.now() });
-    }
-
-    function showChatBubble(id, text) {
-        const p = id === myId ? { group: yawObject } : players[id];
-        if(!p) return;
-        if(p.chatBubble) p.group.remove(p.chatBubble);
-        const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 128;
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0,0,512,128);
-        ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.strokeRect(0,0,512,128);
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 40px Arial'; ctx.textAlign = 'center';
-        ctx.fillText(text, 256, 75);
-        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: true }));
-        sprite.scale.set(4, 1, 1); sprite.position.set(0, 4, 0);
-        p.group.add(sprite); p.chatBubble = sprite;
-        setTimeout(() => { if(p.chatBubble === sprite) { p.group.remove(sprite); p.chatBubble = null; } }, 5000);
-    }
-
-    function reloadGun() {
-        if(isReloading || ammo === 30 || isDead) return;
-        isReloading = true; document.getElementById('ui-reloading').style.display = 'inline';
-        setTimeout(() => {
-            if(isDead) return; ammo = 30; isReloading = false;
-            document.getElementById('ui-reloading').style.display = 'none'; updateHUD();
-        }, 2000);
-    }
-
-    function takeDamage(amount) {
-        if(isDead) return; health -= amount; updateHUD();
-        if(health <= 0) die();
-    }
-
-    function die() {
-        isDead = true; health = 0; updateHUD();
-        socket.emit('RemoteEvent', { type: 'die', id: myId });
-        document.getElementById('ui-death').classList.remove('hidden');
-        if(deviceType === 'computer') document.exitPointerLock();
-        setTimeout(() => {
-            document.getElementById('ui-death').classList.add('hidden'); respawn();
-            if(deviceType === 'computer' && document.getElementById('ui-chat').classList.contains('hidden')) document.getElementById('game-canvas').requestPointerLock();
-        }, 3000);
-    }
-
-    function respawn() {
-        health = MAX_HEALTH; ammo = 30; isReloading = false; isDead = false;
-        document.getElementById('ui-reloading').style.display = 'none';
-        let rx, rz, attempts = 0;
-        while(attempts < 100) {
-            rx = (Math.random()-0.5)*400; rz = (Math.random()-0.5)*400;
-            const testBox = new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(rx, 1.5, rz), new THREE.Vector3(4, 4, 4));
-            if(!collisionBoxes.some(box => testBox.intersectsBox(box))) break;
-            attempts++;
-        }
-        yawObject.position.set(rx, 2, rz); velocity.set(0,0,0); updateHUD();
-        socket.emit('RemoteEvent', { type: 'respawn', id: myId });
-    }
-
-    function updateHUD() {
-        document.getElementById('ui-ammo').innerText = ammo;
-        document.getElementById('health-fill').style.width = Math.max(0, health) + '%';
-    }
-
-    socket.on('RemoteEvent', (data) => {
-        if(!scene) return;
-        if(data.type === 'req_map' && isHost) socket.emit('RemoteEvent', { type: 'map_data', map: mapData, time: serverStartTime });
-        if(data.type === 'map_data' && mapData.length === 0) { mapData = data.map; serverStartTime = data.time; buildMapFromData(); }
-        if(data.type === 'sync' && data.id !== myId) {
-            if(!players[data.id]) createPlayer(data);
-            const p = players[data.id];
-            p.targetPos.set(data.x, data.y, data.z); p.targetRot = data.rot; p.isMoving = data.move; p.health = data.hp;
-            if(p.meshBody) p.meshBody.material.color.setHex(data.team === 'Terminadores' ? 0xff4444 : 0x4444ff);
-            p.team = data.team;
-        }
-        if(data.type === 'shoot' && data.id !== myId) createBullet(data.from, data.to);
-        if(data.type === 'chat') showChatBubble(data.id, data.text);
-        if(data.type === 'damage' && data.target === myId) takeDamage(data.dmg);
-        if(data.type === 'die' && players[data.id]) players[data.id].group.visible = false;
-        if(data.type === 'respawn' && players[data.id]) players[data.id].group.visible = true;
-        if(data.type === 'leave' && players[data.id]) { scene.remove(players[data.id].group); delete players[data.id]; }
-        if(data.type === 'wipe') serverWipe();
-    });
-
-    function createPlayer(data) {
-        const group = new THREE.Group();
-        const mat = new THREE.MeshLambertMaterial({ color: data.team === 'Terminadores' ? 0xff4444 : 0x4444ff });
-        const body = new THREE.Mesh(new THREE.BoxGeometry(1, 1.5, 0.5), mat); body.position.y = 0.75; body.name = 'body';
-        const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 16), mat); head.position.y = 1.9; head.name = 'head';
-        const armL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1, 0.3), mat); armL.position.set(-0.7, 1, 0);
-        const armR = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1, 0.3), mat); armR.position.set(0.7, 1, 0);
-        const rGun = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.8), new THREE.MeshLambertMaterial({ color: 0x222 })); rGun.position.set(0.7, 0.8, -0.4);
-        group.add(body, head, armL, armR, rGun);
-        
-        // Name Sprite
-        const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 64;
-        const ctx = canvas.getContext('2d'); ctx.fillStyle = '#fff'; ctx.font = '32px monospace'; ctx.textAlign = 'center'; ctx.fillText(data.name, 128, 40);
-        const nameSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: false }));
-        nameSprite.position.y = 3.2; nameSprite.scale.set(3, 0.75, 1);
-        group.add(nameSprite);
-
-        // Health Bar Sprite
-        const hCanvas = document.createElement('canvas'); hCanvas.width = 128; hCanvas.height = 16;
-        const hSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(hCanvas), depthTest: false }));
-        hSprite.position.y = 2.7; hSprite.scale.set(2, 0.2, 1);
-        group.add(hSprite);
-
-        scene.add(group);
-        players[data.id] = { group, meshBody: body, armL, armR, nameSprite, healthBar: hSprite, hCtx: hCanvas.getContext('2d'), hTex: hSprite.material.map, targetPos: new THREE.Vector3(data.x, data.y, data.z), targetRot: data.rot, isMoving: false, animTime: 0, team: data.team, name: data.name, health: 100 };
-    }
-
-    function sendSync() {
-        if(!scene || isDead) return;
-        const isMoving = moveForward || moveBackward || moveLeft || moveRight || joyLeftData.x !== 0 || joyLeftData.y !== 0;
-        socket.emit('RemoteEvent', { type: 'sync', id: myId, name: myName, team: myTeam, x: yawObject.position.x, y: yawObject.position.y, z: yawObject.position.z, rot: yawObject.rotation.y, move: isMoving, hp: health });
-    }
-
-    function animate() {
-        requestAnimationFrame(animate);
-        if(!scene) return;
-        const delta = clock.getDelta();
-        checkAFK(); checkServerTimer();
-
-        if(!isDead) {
-            if(shootActive) shoot();
-            myGun.position.z += ( -0.5 - myGun.position.z ) * 0.1;
-            velocity.x -= velocity.x * 10.0 * delta; velocity.z -= velocity.z * 10.0 * delta; velocity.y -= 9.8 * 4.0 * delta;
-            direction.z = (Number(moveBackward) - Number(moveForward)) + joyLeftData.y;
-            direction.x = (Number(moveRight) - Number(moveLeft)) + joyLeftData.x;
-            if(direction.length() > 0) direction.normalize();
-            const speed = isSprinting ? 80.0 : 50.0;
-            velocity.z += direction.z * speed * delta; velocity.x += direction.x * speed * delta;
-            const oldPos = yawObject.position.clone();
-            yawObject.translateX(velocity.x * delta); yawObject.translateY(velocity.y * delta); yawObject.translateZ(velocity.z * delta);
-            if (yawObject.position.y < 2) { velocity.y = 0; yawObject.position.y = 2; canJump = true; }
-            yawObject.position.x = Math.max(-245, Math.min(245, yawObject.position.x));
-            yawObject.position.z = Math.max(-245, Math.min(245, yawObject.position.z));
-            playerBox.setFromCenterAndSize(yawObject.position.clone().setY(1), new THREE.Vector3(1, 2, 1));
-            if(collisionBoxes.some(box => playerBox.intersectsBox(box))) yawObject.position.copy(oldPos);
-        }
-
-        bullets = bullets.filter(b => { if(Date.now() - b.time > 100) { scene.remove(b.mesh); return false; } return true; });
-
-        const raycaster = new THREE.Raycaster();
-        for(let id in players) {
-            const p = players[id];
-            p.group.position.lerp(p.targetPos, 0.2);
-            let diff = p.targetRot - p.group.rotation.y;
-            while(diff < -Math.PI) diff += Math.PI * 2; while(diff > Math.PI) diff -= Math.PI * 2;
-            p.group.rotation.y += diff * 0.2;
-            if(p.isMoving) { p.animTime += delta * 10; p.armL.rotation.x = Math.sin(p.animTime) * 0.5; p.armR.rotation.x = -Math.sin(p.animTime) * 0.5; }
-            else { p.armL.rotation.x = 0; p.armR.rotation.x = 0; }
-
-            // Enemy HUD Logic (Distance + Occlusion)
-            const dist = camera.position.distanceTo(p.group.position);
-            let visible = dist < 60;
-            if(visible) {
-                raycaster.set(camera.position, p.group.position.clone().sub(camera.position).normalize());
-                const intersects = raycaster.intersectObjects(worldObjects);
-                if(intersects.length > 0 && intersects[0].distance < dist) visible = false;
-            }
-            p.nameSprite.visible = visible; p.healthBar.visible = visible;
-            if(visible) {
-                p.hCtx.fillStyle = '#500'; p.hCtx.fillRect(0,0,128,16);
-                p.hCtx.fillStyle = '#f00'; p.hCtx.fillRect(0,0, (p.health/100)*128, 16);
-                p.hTex.needsUpdate = true;
-            }
-        }
-        renderer.render(scene, camera);
-    }
-
-    function checkAFK() { if(Date.now() - afkTimer > 60000) { socket.emit('RemoteEvent', { type: 'leave', id: myId }); location.reload(); } }
-    function checkServerTimer() {
-        if(serverStartTime === 0) return;
-        const remaining = (3 * 60 * 1000) - (Date.now() - serverStartTime);
-        if(remaining <= 0) { if(isHost) socket.emit('RemoteEvent', { type: 'wipe' }); serverWipe(); }
-        else {
-            const mins = Math.floor(remaining / 60000).toString().padStart(2, '0');
-            const secs = Math.floor((remaining % 60000) / 1000).toString().padStart(2, '0');
-            document.getElementById('timer').innerText = `Map Reset: ${mins}:${secs}`;
-        }
-    }
-
-    function serverWipe() {
-        if(deviceType === 'computer') document.exitPointerLock();
-        for(let id in players) scene.remove(players[id].group);
-        worldObjects.forEach(obj => scene.remove(obj));
-        players = {}; worldObjects = []; collisionBoxes = []; mapData = []; isHost = false; serverStartTime = 0;
-        document.getElementById('game-canvas').style.display = 'none';
-        document.getElementById('hud').style.display = 'none';
-        document.getElementById('mobile-controls').style.display = 'none';
-        document.getElementById('ui-team').classList.remove('hidden');
-    }
-
-    window.addEventListener('resize', () => {
-        if(!camera) return; camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-</script>
+    </script>
 </body>
 </html>
