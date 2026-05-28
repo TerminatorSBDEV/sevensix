@@ -2,164 +2,1936 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Termux Tic-Tac-Toe</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Survive the Ayuwoki</title>
     <style>
+        :root {
+            --glow-red: #ff0000;
+            --dark-bg: #030303;
+            --panel-bg: rgba(10, 10, 10, 0.95);
+            --border-glow: 1px solid rgba(255, 0, 0, 0.3);
+        }
+
         * {
             box-sizing: border-box;
+            user-select: none;
             margin: 0;
             padding: 0;
-            font-family: sans-serif;
+            font-family: 'Courier New', Courier, monospace;
         }
-        body {
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--dark-bg);
+            color: #ffffff;
+        }
+
+        /* Loading & Menu Screens */
+        .overlay-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--dark-bg);
+            z-index: 100;
             display: flex;
             flex-direction: column;
-            align-items: center;
             justify-content: center;
-            min-height: 100vh;
-            background-color: #121212;
-            color: #ffffff;
-            overflow: hidden;
+            align-items: center;
+            transition: opacity 0.5s ease;
         }
-        #status {
-            font-size: 1.5rem;
-            margin-bottom: 20px;
-            text-align: center;
+
+        .hidden {
+            display: none !important;
+            opacity: 0;
+        }
+
+        /* Red bloody flickering title */
+        @keyframes flicker {
+            0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
+                text-shadow: 0 0 5px var(--glow-red), 0 0 15px var(--glow-red), 0 0 30px #800000;
+                opacity: 1;
+            }
+            20%, 24%, 55% {
+                text-shadow: none;
+                opacity: 0.4;
+            }
+        }
+
+        .flicker-title {
+            color: var(--glow-red);
+            font-size: 2.8rem;
             font-weight: bold;
-            min-height: 2rem;
+            text-align: center;
+            animation: flicker 4s infinite;
+            margin-bottom: 5px;
+            letter-spacing: 2px;
         }
-        #board {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            grid-template-rows: repeat(3, 1fr);
-            gap: 10px;
-            width: 90vw;
-            height: 90vw;
-            max-width: 400px;
-            max-height: 400px;
+
+        .version-tag {
+            font-size: 0.9rem;
+            color: #555;
+            margin-bottom: 25px;
         }
-        .cell {
-            background-color: #1e1e1e;
-            border: 2px solid #333;
-            border-radius: 12px;
+
+        .active-counter {
             display: flex;
             align-items: center;
+            gap: 10px;
+            margin-bottom: 30px;
+            font-size: 1.1rem;
+            color: #00ff00;
+        }
+
+        .glowing-ball {
+            width: 12px;
+            height: 12px;
+            background-color: #00ff00;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #00ff00;
+        }
+
+        .menu-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            width: 320px;
+        }
+
+        button {
+            background: rgba(20, 0, 0, 0.6);
+            border: 1px solid rgba(255, 0, 0, 0.4);
+            color: #ffffff;
+            padding: 14px 20px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            outline: none;
+        }
+
+        button:hover {
+            background: rgba(255, 0, 0, 0.2);
+            border-color: var(--glow-red);
+            box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+            transform: scale(1.02);
+        }
+
+        /* Modal Panels */
+        .modal-panel {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90%;
+            max-width: 550px;
+            background: var(--panel-bg);
+            border: 2px solid var(--glow-red);
+            box-shadow: 0 0 20px rgba(255, 0, 0, 0.4);
+            padding: 25px;
+            z-index: 110;
+            max-height: 85%;
+            overflow-y: auto;
+        }
+
+        .modal-title {
+            color: var(--glow-red);
+            font-size: 1.6rem;
+            margin-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 0, 0, 0.3);
+            padding-bottom: 10px;
+            text-align: center;
+        }
+
+        .options-list, .instructions-content {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 20px;
+            font-size: 0.95rem;
+            line-height: 1.4;
+        }
+
+        .option-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .option-label {
+            color: #ddd;
+        }
+
+        select, input[type="text"], input[type="range"] {
+            background: #111;
+            border: 1px solid rgba(255, 0, 0, 0.3);
+            color: #fff;
+            padding: 6px 10px;
+            outline: none;
+            width: 180px;
+        }
+
+        input[type="range"] {
+            width: 130px;
+            accent-color: var(--glow-red);
+        }
+
+        /* Server list specifics */
+        .server-grid {
+            border: 1px solid rgba(255, 0, 0, 0.2);
+            background: #000;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-bottom: 15px;
+        }
+
+        .server-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            cursor: pointer;
+        }
+
+        .server-item:hover {
+            background: rgba(255, 0, 0, 0.1);
+        }
+
+        .help-link {
+            color: #ff9999;
+            text-decoration: underline;
+            cursor: pointer;
+            font-size: 0.85rem;
+            margin-top: 5px;
+            display: inline-block;
+        }
+
+        /* In-game UI Canvas Overlay */
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #hud {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .hud-bar {
+            width: 220px;
+            height: 20px;
+            background: rgba(0,0,0,0.6);
+            border: 1px solid #333;
+            position: relative;
+        }
+
+        .hud-fill {
+            height: 100%;
+            width: 100%;
+            transition: width 0.1s linear;
+        }
+
+        #hpFill { background-color: #cc0000; }
+        #staminaFill { background-color: #00aa00; }
+
+        .hud-text {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.75rem;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 1px 1px 2px #000;
+        }
+
+        /* Hotbar Slots */
+        #hotbar {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        .hotbar-slot {
+            width: 55px;
+            height: 55px;
+            background: rgba(10, 10, 10, 0.85);
+            border: 2px solid rgba(255,255,255,0.2);
+            display: flex;
+            flex-direction: column;
             justify-content: center;
+            align-items: center;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .hotbar-slot.active {
+            border-color: var(--glow-red);
+            box-shadow: 0 0 8px rgba(255,0,0,0.6);
+        }
+
+        .slot-num {
+            position: absolute;
+            top: 2px;
+            left: 4px;
+            font-size: 0.65rem;
+            color: #666;
+        }
+
+        .slot-icon {
+            font-size: 1.5rem;
+        }
+
+        .slot-stack {
+            position: absolute;
+            bottom: 2px;
+            right: 4px;
+            font-size: 0.7rem;
+            color: #00ff00;
+        }
+
+        /* Notifications & Horror Warnings */
+        #notifications {
+            position: absolute;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            max-width: 500px;
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+            text-align: center;
+        }
+
+        .notification {
+            background: rgba(0,0,0,0.85);
+            border: 1px dashed rgba(255,0,0,0.5);
+            padding: 10px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .notif-title {
+            color: #ff3333;
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+
+        .notif-body {
+            color: #eee;
+            font-size: 0.85rem;
+        }
+
+        /* Mobile Controls */
+        .mobile-btn {
+            position: absolute;
+            width: 65px;
+            height: 65px;
+            background: rgba(30, 0, 0, 0.6);
+            border: 2px solid rgba(255, 0, 0, 0.4);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 15;
+            color: #fff;
+            font-size: 0.9rem;
+            font-weight: bold;
+        }
+
+        #mobileDrop {
+            bottom: 90px;
+            right: 15px;
+        }
+
+        #mobileInteract {
+            bottom: 15px;
+            right: 90px;
+        }
+
+        #mobileUse {
+            bottom: 90px;
+            right: 90px;
+            width: 75px;
+            height: 75px;
+            background: rgba(100, 0, 0, 0.4);
+        }
+
+        /* Respawn Overlay */
+        #spectateUI {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.85);
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .death-title {
+            color: var(--glow-red);
             font-size: 3rem;
             font-weight: bold;
-            cursor: pointer;
-            /* Prevents zoom/double-tap delays on mobile touchscreens */
-            touch-action: manipulation; 
-            -webkit-tap-highlight-color: transparent;
+            animation: flicker 2s infinite;
+            margin-bottom: 40px;
+            text-align: center;
         }
-        .cell:active {
-            background-color: #2a2a2a;
+
+        #pingDisplay {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            z-index: 10;
+            font-size: 0.8rem;
+            color: #999;
+            pointer-events: none;
         }
-        .cell.X { color: #3498db; }
-        .cell.O { color: #e74c3c; }
+
+        /* Utility classes */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
     </style>
 </head>
 <body>
 
-    <div id="status">Connecting to server...</div>
-    <div id="board">
-        <div class="cell" data-index="0"></div>
-        <div class="cell" data-index="1"></div>
-        <div class="cell" data-index="2"></div>
-        <div class="cell" data-index="3"></div>
-        <div class="cell" data-index="4"></div>
-        <div class="cell" data-index="5"></div>
-        <div class="cell" data-index="6"></div>
-        <div class="cell" data-index="7"></div>
-        <div class="cell" data-index="8"></div>
+    <!-- CONFIGURATION SECTION -->
+    <script>
+        // REPLACE WITH GENERATED LINK FOR REMOTE PLAY (E.G. 'wss://your-link.trycloudflare.com')
+        // LEAVE AS "" TO AUTO-DETECT LOCAL SYSTEM IP/HOST ADDRESS
+        const CLOUDFLARE_TUNNEL_URL = "https://clinics-ellen-automobiles-aqua.trycloudflare.com"; 
+    </script>
+
+    <!-- LOADING SCREEN -->
+    <div id="loadingScreen" class="overlay-screen">
+        <div class="flicker-title">CONNECTING...</div>to
+        <p style="color: #666; margin-top: 15px;">Establishing connection to the main frame</p>
     </div>
 
-    <script>
-        // Use the secure WebSocket protocol (wss) for Cloudflare tunnels
-        const wsUrl = "wss://misc-removing-sharon-prozac.trycloudflare.com";
-        const socket = new WebSocket(wsUrl);
-
-        const statusDisplay = document.getElementById('status');
-        const cells = document.querySelectorAll('.cell');
+    <!-- MAIN MENU -->
+    <div id="mainMenu" class="overlay-screen hidden">
+        <div class="flicker-title">SURVIVE THE AYUWOKI</div>
+        <div class="version-tag">v1.0</div>
         
-        let playerSymbol = null;
-        let isMyTurn = false;
+        <div class="active-counter">
+            <div class="glowing-ball"></div>
+            <span>* active users: <span id="onlineCount">0</span></span>
+        </div>
 
-        socket.onopen = () => {
-            statusDisplay.innerText = "Connected! Waiting for opponent...";
-        };
+        <div class="menu-buttons">
+            <button onclick="ui.openServerBrowser()">AHEAD TO THE GAME</button>
+            <button onclick="ui.showPanel('optionsPanel')">OPTIONS</button>
+            <button onclick="ui.showPanel('instructionsPanel')">INSTRUCTIONS</button>
+        </div>
+    </div>
 
-        socket.onmessage = (event) => {
-            const data = JSON.parse(event.data);
+    <!-- INSTRUCTIONS MODAL -->
+    <div id="instructionsPanel" class="modal-panel hidden">
+        <div class="modal-title">SURVIVAL MEMORANDUM</div>
+        <div class="instructions-content">
+            <p><strong>DAY CYCLE (1 min):</strong> Preparation stage. The creature stays hidden. Loot spawns in bookshelves & drawers (70% chance of respawn). Search them carefully.</p>
+            <p><strong>NIGHT CYCLE (5 mins):</strong> The Ayuwoki awakens. He always moves toward the closest survivor. Use your flashlight to navigate, but watch your battery.</p>
+            <p><strong>AWARENESS:</strong> The closer you get to the terror radius, the more your screen will glitch. If he spots you, run!</p>
+            <p><strong>ITEMS:</strong> Use bandages, drinks, bats, and cameras from drawers. If blinded, players see light or dark (epileptic). If Ayuwoki is blinded, he is stunned.</p>
+            <p><strong>PC CONTROLS:</strong> WASD to Move, SHIFT to Sprint, MOUSE to aim flashlight. Q to drop active item, E to interact (pick up, search, doors). 1-6 keys to switch slots.</p>
+            <p><strong>MOBILE CONTROLS:</strong> Left Virtual Joystick to move, Right Virtual Joystick to turn/aim. Use dedicated on-screen buttons to Drop, Interact, and Use active items.</p>
+        </div>
+        <button style="width: 100%;" onclick="ui.hidePanel('instructionsPanel')">CLOSE</button>
+    </div>
 
-            if (data.type === 'init') {
-                playerSymbol = data.symbol;
-                statusDisplay.innerText = `You are Player ${playerSymbol}. Waiting for match...`;
+    <!-- OPTIONS MODAL -->
+    <div id="optionsPanel" class="modal-panel hidden">
+        <div class="modal-title">CALIBRATIONS</div>
+        <div class="options-list">
+            <div class="option-row">
+                <span class="option-label">Reduced screenshake</span>
+                <select id="optShake">
+                    <option value="false">OFF</option>
+                    <option value="true">ON</option>
+                </select>
+            </div>
+            <div class="option-row">
+                <span class="option-label">Epileptic mode</span>
+                <select id="optEpilepsy">
+                    <option value="false">OFF</option>
+                    <option value="true">ON</option>
+                </select>
+            </div>
+            <div class="option-row">
+                <span class="option-label">Show fps and ping</span>
+                <select id="optFps">
+                    <option value="true">ON</option>
+                    <option value="false">OFF</option>
+                </select>
+            </div>
+            <div class="option-row">
+                <span class="option-label">Sounds volume (10-100)</span>
+                <div>
+                    <input type="range" id="optVolume" min="10" max="100" value="80">
+                    <span id="volumeVal" style="font-size: 0.8rem; vertical-align: middle; margin-left: 5px;">80</span>
+                </div>
+            </div>
+            <div class="option-row">
+                <span class="option-label">Displayname</span>
+                <input type="text" id="optName" placeholder="Leave blank for Guest" maxlength="20">
+            </div>
+        </div>
+        <div style="display: flex; gap: 15px;">
+            <button style="flex: 1;" onclick="ui.applyOptions()">APPLY</button>
+            <button style="flex: 1;" onclick="ui.hidePanel('optionsPanel')">CLOSE</button>
+        </div>
+    </div>
+
+    <!-- SERVER BROWSER MODAL -->
+    <div id="serverBrowserPanel" class="modal-panel hidden">
+        <div class="modal-title">ACTIVE HORIZONS</div>
+        <div class="server-grid" id="serverGridList">
+            <!-- Dynamic Server Items -->
+            <div style="text-align: center; color: #666; padding: 20px;">Searching networks...</div>
+        </div>
+        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+            <button style="flex: 1;" onclick="ui.showPanel('createServerPanel')">CREATE SERVER</button>
+            <button style="flex: 1;" onclick="ui.hidePanel('serverBrowserPanel')">CLOSE</button>
+        </div>
+    </div>
+
+    <!-- CREATE SERVER MODAL -->
+    <div id="createServerPanel" class="modal-panel hidden">
+        <div class="modal-title">COMMISSION ZONE</div>
+        <div class="options-list">
+            <div class="option-row">
+                <span class="option-label">1 - Name your server:</span>
+                <input type="text" id="srvName" placeholder="My Server" maxlength="20">
+            </div>
+            <div class="option-row">
+                <span class="option-label">2 - Max people:</span>
+                <select id="srvMax">
+                    <option value="4">4 Survivors</option>
+                    <option value="8" selected>8 Survivors</option>
+                    <option value="12">12 Survivors</option>
+                    <option value="15">15 Survivors</option>
+                </select>
+            </div>
+            <div class="option-row">
+                <span class="option-label">3 - Network ownership:</span>
+                <select id="srvOwnership">
+                    <option value="nearest">Nearest User</option>
+                    <option value="host">Server Hoster</option>
+                </select>
+            </div>
+            <div style="text-align: right;">
+                <span class="help-link" onclick="ui.showPanel('ownershipExemptionPanel')">learn network ownership types</span>
+            </div>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button style="flex: 1;" onclick="ui.createServer()">CREATE SERVER</button>
+            <button style="flex: 1;" onclick="ui.hidePanel('createServerPanel')">CANCEL</button>
+        </div>
+    </div>
+
+    <!-- OWNERSHIP DESCRIPTION MODAL -->
+    <div id="ownershipExemptionPanel" class="modal-panel hidden">
+        <div class="modal-title">NETWORK MATRIX STRUCTURE</div>
+        <div class="instructions-content">
+            <p><strong>Nearest Entity Ownership:</strong> Coordinates physics dynamically based on proximity. The client closest to the Ayuwoki handles local pathing & collision checks, updating everyone. Minimizes lag for active chases.</p>
+            <p><strong>Server Hoster Ownership:</strong> Relies entirely on the original lobby host to compile coordinates. Secure & predictable, ensuring the server host handles the master calculations. Authority falls back to next connected player if host leaves.</p>
+        </div>
+        <button style="width: 100%;" onclick="ui.hidePanel('ownershipExemptionPanel')">BACK</button>
+    </div>
+
+    <!-- SPECTATOR & DEATH SCREEN -->
+    <div id="spectateUI" class="hidden">
+        <div class="death-title" id="deathTitle">the Ayuwoki gotcha.</div>
+        <button id="respawnBtn" style="width: 200px;" onclick="game.requestRespawn()">RESPAWN</button>
+    </div>
+
+    <!-- HUD OVERLAY (In Game) -->
+    <div id="hud" class="hidden">
+        <div class="hud-bar">
+            <div id="hpFill" class="hud-fill"></div>
+            <div class="hud-text">VITALS: <span id="hpText">100</span>%</div>
+        </div>
+        <div class="hud-bar">
+            <div id="staminaFill" class="hud-fill"></div>
+            <div class="hud-text">STAMINA: <span id="staminaText">100</span>%</div>
+        </div>
+    </div>
+
+    <!-- HOTBAR HUD -->
+    <div id="hotbar" class="hidden">
+        <div class="hotbar-slot active" onclick="game.setActiveSlot(0)">
+            <span class="slot-num">1</span><span class="slot-icon" id="icon0"></span><span class="slot-stack" id="stack0"></span>
+        </div>
+        <div class="hotbar-slot" onclick="game.setActiveSlot(1)">
+            <span class="slot-num">2</span><span class="slot-icon" id="icon1"></span><span class="slot-stack" id="stack1"></span>
+        </div>
+        <div class="hotbar-slot" onclick="game.setActiveSlot(2)">
+            <span class="slot-num">3</span><span class="slot-icon" id="icon2"></span><span class="slot-stack" id="stack2"></span>
+        </div>
+        <div class="hotbar-slot" onclick="game.setActiveSlot(3)">
+            <span class="slot-num">4</span><span class="slot-icon" id="icon3"></span><span class="slot-stack" id="stack3"></span>
+        </div>
+        <div class="hotbar-slot" onclick="game.setActiveSlot(4)">
+            <span class="slot-num">5</span><span class="slot-icon" id="icon4"></span><span class="slot-stack" id="stack4"></span>
+        </div>
+        <div class="hotbar-slot" onclick="game.setActiveSlot(5)">
+            <span class="slot-num">6</span><span class="slot-icon" id="icon5"></span><span class="slot-stack" id="stack5"></span>
+        </div>
+    </div>
+
+    <!-- ON-SCREEN SYSTEM NOTIFICATIONS -->
+    <div id="notifications"></div>
+
+    <!-- ON-SCREEN PING & FPS -->
+    <div id="pingDisplay" class="hidden">FPS: <span id="fpsVal">--</span> | PING: <span id="pingVal">--</span>ms</div>
+
+    <!-- MOBILE TOUCH BUTTONS -->
+    <div id="mobileDrop" class="mobile-btn hidden" style="touch-action: none;">DROP</div>
+    <div id="mobileInteract" class="mobile-btn hidden" style="touch-action: none;">INTERACT</div>
+    <div id="mobileUse" class="mobile-btn hidden" style="touch-action: none;">USE</div>
+
+    <!-- MAIN GAME CANVAS -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- CORE SCRIPTS -->
+    <script>
+        // HORROR WEB AUDIO SYNTHESIZER
+        class HorrorSynth {
+            constructor() {
+                this.ctx = null;
             }
-
-            if (data.type === 'start') {
-                isMyTurn = data.turn === playerSymbol;
-                statusDisplay.innerText = isMyTurn ? "Your turn!" : "Opponent's turn...";
-                updateBoard(data.board);
-            }
-
-            if (data.type === 'update') {
-                isMyTurn = data.turn === playerSymbol;
-                statusDisplay.innerText = isMyTurn ? "Your turn!" : "Opponent's turn...";
-                updateBoard(data.board);
-            }
-
-            if (data.type === 'gameover') {
-                updateBoard(data.board);
-                if (data.winner === 'Draw') {
-                    statusDisplay.innerText = "It's a Draw! Refresh to play again.";
-                } else {
-                    statusDisplay.innerText = data.winner === playerSymbol ? "You Win!" : "You Lose!";
+            init() {
+                if (this.ctx) return;
+                try {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                } catch(e) {
+                    console.error("Audio Context unavailable.", e);
                 }
-                isMyTurn = false;
-                socket.close();
             }
-
-            if (data.type === 'opponent_disconnected') {
-                statusDisplay.innerText = "Opponent disconnected. Refresh to restart.";
-                isMyTurn = false;
+            playHeartbeat(proximityFactor) { // proximityFactor 0 to 1
+                if (!this.ctx || options.volume <= 0) return;
+                let volume = (options.volume / 100) * 0.4 * proximityFactor;
+                let pitch = 55 + (proximityFactor * 30);
+                let osc = this.ctx.createOscillator();
+                let gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(pitch, this.ctx.currentTime);
+                gain.gain.setValueAtTime(volume, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.25);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.25);
             }
-        };
-
-        socket.onerror = (error) => {
-            statusDisplay.innerText = "Connection error.";
-            console.error(error);
-        };
-
-        socket.onclose = () => {
-            if (statusDisplay.innerText !== "Opponent disconnected. Refresh to restart." && !statusDisplay.innerText.includes("Win")) {
-                statusDisplay.innerText = "Disconnected from server.";
+            playFlash() {
+                if (!this.ctx || options.volume <= 0) return;
+                let osc = this.ctx.createOscillator();
+                let gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(1200, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.15);
+                gain.gain.setValueAtTime((options.volume / 100) * 0.1, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.15);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.15);
             }
-        };
-
-        function updateBoard(boardState) {
-            cells.forEach((cell, index) => {
-                cell.innerText = boardState[index];
-                cell.className = `cell ${boardState[index]}`;
-            });
+            playStun() {
+                if (!this.ctx || options.volume <= 0) return;
+                let osc = this.ctx.createOscillator();
+                let gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(200, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(800, this.ctx.currentTime + 0.5);
+                gain.gain.setValueAtTime((options.volume / 100) * 0.2, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.5);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.5);
+            }
+            playCrash() {
+                if (!this.ctx || options.volume <= 0) return;
+                let bufferSize = this.ctx.sampleRate * 0.8;
+                let buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                let data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+                let noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                let filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(300, this.ctx.currentTime);
+                let gain = this.ctx.createGain();
+                gain.gain.setValueAtTime((options.volume / 100) * 0.6, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.8);
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                noise.start();
+            }
+            playJumpscare() {
+                if (!this.ctx || options.volume <= 0) return;
+                let bufferSize = this.ctx.sampleRate * 2.0;
+                let buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                let data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+                let noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                let filter = this.ctx.createBiquadFilter();
+                filter.type = 'peaking';
+                filter.frequency.setValueAtTime(200, this.ctx.currentTime);
+                filter.frequency.linearRampToValueAtTime(50, this.ctx.currentTime + 1.5);
+                let gain = this.ctx.createGain();
+                gain.gain.setValueAtTime((options.volume / 100) * 0.9, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 1.8);
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+                noise.start();
+            }
         }
 
-        // Handle touchscreen taps / clicks
-        cells.forEach(cell => {
-            cell.addEventListener('click', () => {
-                const index = cell.getAttribute('data-index');
+        const audio = new HorrorSynth();
+
+        // GLOBALS / CONFIG
+        const options = {
+            shake: false,
+            epilepsy: false,
+            fps: true,
+            volume: 80,
+            displayName: "Guest_" + Math.floor(1000 + Math.random() * 9000)
+        };
+
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+        // SYSTEM NOTIFICATIONS CONTROL
+        function showNotification(title, text, duration = 7000) {
+            const container = document.getElementById("notifications");
+            const element = document.createElement("div");
+            element.className = "notification";
+            element.innerHTML = `<div class="notif-title">${title}</div><div class="notif-body">${text}</div>`;
+            container.appendChild(element);
+            setTimeout(() => {
+                element.style.animation = "fadeIn 0.3s ease reverse";
+                setTimeout(() => element.remove(), 290);
+            }, duration);
+        }
+
+        // NETWORKING LAYER
+        let socket = null;
+        let lastPingTime = 0;
+        let pingInterval = null;
+
+        function connectSocket() {
+            let wsUrl = CLOUDFLARE_TUNNEL_URL;
+            if (!wsUrl) {
+                const protocol = window.location.protocol === "https:" ? "wss://" : "ws://";
+                wsUrl = protocol + (window.location.host || "localhost:8005");
+            } else {
+                if (wsUrl.startsWith("http")) {
+                    wsUrl = wsUrl.replace("https://", "wss://").replace("http://", "ws://");
+                }
+            }
+
+            socket = new WebSocket(wsUrl);
+
+            socket.onopen = () => {
+                document.getElementById("loadingScreen").classList.add("hidden");
+                document.getElementById("mainMenu").classList.remove("hidden");
+                sendMsg("c_connect", { name: options.displayName });
                 
-                if (!isMyTurn || cell.innerText !== '') {
-                    return; 
+                pingInterval = setInterval(() => {
+                    lastPingTime = Date.now();
+                    sendMsg("ping", {});
+                }, 2000);
+            };
+
+            socket.onmessage = (event) => {
+                const packet = JSON.parse(event.data);
+                netHandler(packet);
+            };
+
+            socket.onclose = () => {
+                document.getElementById("loadingScreen").classList.remove("hidden");
+                document.getElementById("loadingScreen").innerHTML = `<div class="flicker-title">LOST CONNECTION</div><p style="color:#666;">Retrying connection...</p>`;
+                clearInterval(pingInterval);
+                setTimeout(connectSocket, 3000);
+            };
+        }
+
+        function sendMsg(type, payload) {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ type, payload }));
+            }
+        }
+
+        function netHandler(packet) {
+            const { type, data } = packet;
+            if (type === "pong") {
+                const ping = Date.now() - lastPingTime;
+                document.getElementById("pingVal").innerText = ping;
+            } else if (type === "s_lobby_sync") {
+                document.getElementById("onlineCount").innerText = data.totalOnline;
+                ui.renderServerList(data.rooms);
+            } else if (type === "s_room_join_success") {
+                game.enterRoom(data);
+            } else if (type === "s_sync_frame") {
+                game.syncFrame(data);
+            } else if (type === "s_notification") {
+                showNotification(data.title, data.body, data.duration);
+            } else if (type === "s_jumpscare") {
+                game.triggerJumpscare(data);
+            } else if (type === "s_sound") {
+                if (data.sound === "crash") audio.playCrash();
+                if (data.sound === "stun") audio.playStun();
+            } else if (type === "s_blinded") {
+                game.triggerBlind(data.duration);
+            }
+        }
+
+        // GUI CONTROLLER
+        const ui = {
+            showPanel(id) {
+                document.getElementById(id).classList.remove("hidden");
+                audio.init();
+            },
+            hidePanel(id) {
+                document.getElementById(id).classList.add("hidden");
+            },
+            openServerBrowser() {
+                this.showPanel("serverBrowserPanel");
+                sendMsg("c_get_rooms", {});
+            },
+            renderServerList(rooms) {
+                const container = document.getElementById("serverGridList");
+                container.innerHTML = "";
+                if (rooms.length === 0) {
+                    container.innerHTML = `<div style="text-align: center; color: #555; padding: 25px;">No active game instances found.</div>`;
+                    return;
+                }
+                rooms.forEach(srv => {
+                    const row = document.createElement("div");
+                    row.className = "server-item";
+                    row.onclick = () => {
+                        sendMsg("c_join_room", { roomId: srv.id, name: options.displayName });
+                    };
+                    row.innerHTML = `<span>[${srv.name}] - Owner: ${srv.owner}</span><span>${srv.players}/${srv.maxPlayers}</span>`;
+                    container.appendChild(row);
+                });
+            },
+            applyOptions() {
+                const nameInp = document.getElementById("optName").value.trim();
+                const cleanName = nameInp.replace(/[^a-zA-Z0-9 ]/g, "");
+                if (cleanName.length >= 2 && cleanName.length <= 20) {
+                    options.displayName = cleanName;
+                }
+                options.shake = document.getElementById("optShake").value === "true";
+                options.epilepsy = document.getElementById("optEpilepsy").value === "true";
+                options.fps = document.getElementById("optFps").value === "true";
+                options.volume = parseInt(document.getElementById("optVolume").value);
+                
+                document.getElementById("pingDisplay").className = options.fps ? "" : "hidden";
+                sendMsg("c_update_name", { name: options.displayName });
+                
+                this.hidePanel("optionsPanel");
+                audio.init();
+            },
+            createServer() {
+                const sName = document.getElementById("srvName").value.trim();
+                const cleanName = sName.replace(/[^a-zA-Z0-9 ]/g, "");
+                if (cleanName.length < 2 || cleanName.length > 20) {
+                    alert("Server name must be 2-20 chars and alphanumeric!");
+                    return;
+                }
+                const maxP = parseInt(document.getElementById("srvMax").value);
+                const own = document.getElementById("srvOwnership").value;
+
+                sendMsg("c_create_room", {
+                    name: cleanName,
+                    maxPlayers: maxP,
+                    ownership: own
+                });
+
+                this.hidePanel("createServerPanel");
+                this.hidePanel("serverBrowserPanel");
+            }
+        };
+
+        // RUST & VOLTAGE SLIDER CHANGE SYNCHRONIZATION
+        document.getElementById("optVolume").oninput = function() {
+            document.getElementById("volumeVal").innerText = this.value;
+        };
+
+        // IN-GAME ENGINE & RENDERING
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // Simple Mobile Touch Vectors
+        const touchState = {
+            leftTouchId: null,
+            leftStart: {x:0, y:0},
+            leftMove: {x:0, y:0},
+            rightTouchId: null,
+            rightStart: {x:0, y:0},
+            rightMove: {x:0, y:0},
+            isSprinting: false
+        };
+
+        const localInput = {
+            w: false, a: false, s: false, d: false,
+            shift: false,
+            angle: 0,
+            activeSlot: 0,
+            lastSentX: 0,
+            lastSentY: 0,
+            lastSentAngle: 0,
+            useProgress: 0,
+            useTargetDuration: 0,
+            useItemName: ""
+        };
+
+        const game = {
+            inRoom: false,
+            roomId: "",
+            map: null,
+            players: {},
+            ayuwoki: null,
+            localPlayerId: "",
+            doors: {},
+            drawers: {},
+            pickups: [],
+            cycle: "day",
+            timeLeft: 0,
+            localPlayer: {
+                x: 30*120, y: 30*120,
+                hp: 100, stamina: 100,
+                inventory: [],
+                injured: false,
+                lastDamagedTime: 0,
+                lastStaminaUsedTime: 0
+            },
+            cameraFlashActive: 0,
+            cameraFlashCooldown: 0,
+            blindDuration: 0,
+            lastFrameTime: Date.now(),
+            fps: 0,
+            frameCount: 0,
+            fpsTimer: 0,
+            cameraShakeAmount: 0,
+            jumpscareActive: false,
+            jumpscareTime: 0,
+            particles: [],
+
+            enterRoom(data) {
+                this.inRoom = true;
+                this.roomId = data.roomId;
+                this.map = data.map;
+                this.localPlayerId = data.playerId;
+                this.localPlayer.x = data.spawnX;
+                this.localPlayer.y = data.spawnY;
+                
+                document.getElementById("mainMenu").classList.add("hidden");
+                document.getElementById("hud").classList.remove("hidden");
+                document.getElementById("hotbar").classList.remove("hidden");
+                document.getElementById("pingDisplay").className = options.fps ? "" : "hidden";
+
+                if (isMobile) {
+                    document.getElementById("mobileDrop").classList.remove("hidden");
+                    document.getElementById("mobileInteract").classList.remove("hidden");
+                    document.getElementById("mobileUse").classList.remove("hidden");
                 }
 
-                // Send the move to the server
-                socket.send(JSON.stringify({
-                    type: 'move',
-                    index: parseInt(index)
-                }));
-            });
+                // Initialize empty inventory UI
+                this.updateInventoryUI();
+                audio.init();
+            },
+
+            syncFrame(data) {
+                this.players = data.players;
+                this.ayuwoki = data.ayuwoki;
+                this.cycle = data.cycle;
+                this.timeLeft = data.timeLeft;
+                this.doors = data.doors;
+                this.drawers = data.drawers;
+                this.pickups = data.pickups;
+
+                // Sync local player metadata from authority server
+                const syncMe = this.players[this.localPlayerId];
+                if (syncMe) {
+                    // Soft sync to avoid local snapping
+                    this.localPlayer.hp = syncMe.hp;
+                    this.localPlayer.stamina = syncMe.stamina;
+                    this.localPlayer.inventory = syncMe.inventory;
+                    this.localPlayer.injured = syncMe.injured;
+                    this.updateInventoryUI();
+                }
+            },
+
+            setActiveSlot(idx) {
+                localInput.activeSlot = idx;
+                const slots = document.getElementsByClassName("hotbar-slot");
+                for (let i = 0; i < slots.length; i++) {
+                    slots[i].classList.remove("active");
+                }
+                slots[idx].classList.add("active");
+            },
+
+            updateInventoryUI() {
+                const items = this.localPlayer.inventory || [];
+                for (let i = 0; i < 6; i++) {
+                    const iconEl = document.getElementById("icon" + i);
+                    const stackEl = document.getElementById("stack" + i);
+                    const item = items[i];
+                    if (item) {
+                        iconEl.innerText = this.getItemEmoji(item.type);
+                        stackEl.innerText = item.count > 1 ? item.count : "";
+                    } else {
+                        iconEl.innerText = "";
+                        stackEl.innerText = "";
+                    }
+                }
+            },
+
+            getItemEmoji(type) {
+                switch(type) {
+                    case "bandage": return "🩹";
+                    case "camera": return "📷";
+                    case "energy": return "⚡";
+                    case "snickers": return "🍫";
+                    case "bat": return "🏏";
+                    case "medicine": return "🧪";
+                    default: return "📦";
+                }
+            },
+
+            requestRespawn() {
+                sendMsg("c_respawn", {});
+                document.getElementById("spectateUI").classList.add("hidden");
+                this.jumpscareActive = false;
+            },
+
+            triggerJumpscare(victim) {
+                this.jumpscareActive = true;
+                this.jumpscareTime = Date.now();
+                audio.playJumpscare();
+                if (victim === this.localPlayerId) {
+                    // Apply camera rip
+                    setTimeout(() => {
+                        document.getElementById("spectateUI").classList.remove("hidden");
+                    }, 2000);
+                }
+            },
+
+            triggerBlind(duration) {
+                this.blindDuration = duration;
+            },
+
+            dropItem() {
+                sendMsg("c_drop_item", { slot: localInput.activeSlot, angle: localInput.angle });
+            },
+
+            interact() {
+                sendMsg("c_interact", {});
+            },
+
+            useActiveItem() {
+                const items = this.localPlayer.inventory || [];
+                const item = items[localInput.activeSlot];
+                if (!item) return;
+
+                if (item.type === "camera") {
+                    if (this.cameraFlashCooldown > 0) return;
+                    this.cameraFlashActive = 10;
+                    this.cameraFlashCooldown = 20 * 60; // 20s at 60fps
+                    audio.playFlash();
+                    sendMsg("c_use_item", { slot: localInput.activeSlot, angle: localInput.angle });
+                    return;
+                }
+
+                if (localInput.useProgress > 0) return; // already using
+
+                let duration = 0;
+                if (item.type === "bandage") duration = 8;
+                if (item.type === "energy") duration = 4;
+                if (item.type === "snickers") duration = 1;
+                if (item.type === "medicine") duration = 1;
+                if (item.type === "bat") {
+                    sendMsg("c_use_item", { slot: localInput.activeSlot, angle: localInput.angle });
+                    return;
+                }
+
+                if (duration > 0) {
+                    localInput.useProgress = duration * 60;
+                    localInput.useTargetDuration = duration * 60;
+                    localInput.useItemName = item.type;
+                }
+            },
+
+            // CLIENT SIDE PATHFIND COLLISION ASSIST
+            handleCollisions(dx, dy) {
+                if (!this.map) return {x: this.localPlayer.x, y: this.localPlayer.y};
+                let nx = this.localPlayer.x + dx;
+                let ny = this.localPlayer.y + dy;
+                const r = 20;
+
+                // Simple box resolve bounding nearby solid blocks
+                let startGridX = Math.floor((nx - r) / 120);
+                let endGridX = Math.floor((nx + r) / 120);
+                let startGridY = Math.floor((ny - r) / 120);
+                let endGridY = Math.floor((ny + r) / 120);
+
+                for (let gy = startGridY; gy <= endGridY; gy++) {
+                    for (let gx = startGridX; gx <= endGridX; gx++) {
+                        if (gx < 0 || gy < 0 || gx >= this.map.width || gy >= this.map.height) continue;
+                        const tile = this.map.data[gy][gx];
+                        
+                        // Solid Walls or Trees or Closed Doors
+                        let isSolid = (tile === 1 || tile === 2);
+                        if (tile === 5) { // Door
+                            const doorId = `${gx},${gy}`;
+                            const dSync = this.doors[doorId];
+                            if (dSync && !dSync.isOpen && !dSync.isBroken) {
+                                isSolid = true;
+                            }
+                        }
+
+                        if (isSolid) {
+                            let bx = gx * 120 + 60;
+                            let by = gy * 120 + 60;
+                            let closestX = Math.max(gx * 120, Math.min(nx, (gx + 1) * 120));
+                            let closestY = Math.max(gy * 120, Math.min(ny, (gy + 1) * 120));
+                            let distSqr = (nx - closestX)**2 + (ny - closestY)**2;
+
+                            if (distSqr < r * r) {
+                                let dist = Math.sqrt(distSqr);
+                                if (dist === 0) continue;
+                                let overlap = r - dist;
+                                let penX = ((nx - closestX) / dist) * overlap;
+                                let penY = ((ny - closestY) / dist) * overlap;
+                                nx += penX;
+                                ny += penY;
+                            }
+                        }
+                    }
+                }
+                return {x: nx, y: ny};
+            },
+
+            // MAIN RENDERING LOOP
+            updateAndRender() {
+                const now = Date.now();
+                const dt = (now - this.lastFrameTime) / 1000;
+                this.lastFrameTime = now;
+
+                // Count FPS
+                this.frameCount++;
+                this.fpsTimer += dt;
+                if (this.fpsTimer >= 1.0) {
+                    this.fps = this.frameCount;
+                    this.frameCount = 0;
+                    this.fpsTimer = 0;
+                    document.getElementById("fpsVal").innerText = this.fps;
+                }
+
+                // Check canvas dimensions
+                if (canvas.width !== window.innerWidth || canvas.height !== window.innerHeight) {
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                }
+
+                if (!this.inRoom) {
+                    requestAnimationFrame(() => this.updateAndRender());
+                    return;
+                }
+
+                // Tick timers
+                if (this.cameraFlashCooldown > 0) this.cameraFlashCooldown--;
+                if (this.blindDuration > 0) this.blindDuration -= dt;
+
+                // Handle local movement
+                let speed = 2.5;
+                let isSprinting = false;
+
+                if (this.localPlayer.hp > 0 && !this.jumpscareActive) {
+                    if (isMobile) {
+                        if (touchState.leftTouchId !== null) {
+                            const dx = touchState.leftMove.x - touchState.leftStart.x;
+                            const dy = touchState.leftMove.y - touchState.leftStart.y;
+                            const dist = Math.sqrt(dx*dx + dy*dy);
+                            if (dist > 10) {
+                                isSprinting = touchState.isSprinting && this.localPlayer.stamina > 5;
+                                let curSpeed = isSprinting ? 5.0 : 2.5;
+                                let rad = Math.atan2(dy, dx);
+                                let velocity = this.handleCollisions(Math.cos(rad) * curSpeed, Math.sin(rad) * curSpeed);
+                                this.localPlayer.x = velocity.x;
+                                this.localPlayer.y = velocity.y;
+                            }
+                        }
+                    } else {
+                        isSprinting = localInput.shift && this.localPlayer.stamina > 0;
+                        let curSpeed = isSprinting ? 5.0 : 2.5;
+                        let mx = 0, my = 0;
+                        if (localInput.w) my = -1;
+                        if (localInput.s) my = 1;
+                        if (localInput.a) mx = -1;
+                        if (localInput.d) mx = 1;
+
+                        if (mx !== 0 || my !== 0) {
+                            let rad = Math.atan2(my, mx);
+                            let velocity = this.handleCollisions(Math.cos(rad) * curSpeed, Math.sin(rad) * curSpeed);
+                            this.localPlayer.x = velocity.x;
+                            this.localPlayer.y = velocity.y;
+                        }
+                    }
+                }
+
+                // Increment consumable usage action
+                if (localInput.useProgress > 0) {
+                    localInput.useProgress--;
+                    if (localInput.useProgress <= 0) {
+                        sendMsg("c_use_item", { slot: localInput.activeSlot, angle: localInput.angle });
+                    }
+                }
+
+                // Rate limit coordinates updates to exactly 20Hz (every 50ms)
+                if (now - this.lastUpdateTime >= 50) {
+                    sendMsg("c_player_update", {
+                        x: this.localPlayer.x,
+                        y: this.localPlayer.y,
+                        angle: localInput.angle,
+                        activeSlot: localInput.activeSlot,
+                        isSprinting: isSprinting
+                    });
+                    this.lastUpdateTime = now;
+                }
+
+                // Update Local UI elements
+                document.getElementById("hpFill").style.width = Math.max(0, this.localPlayer.hp) + "%";
+                document.getElementById("hpText").innerText = Math.round(this.localPlayer.hp);
+                document.getElementById("staminaFill").style.width = Math.max(0, this.localPlayer.stamina) + "%";
+                document.getElementById("staminaText").innerText = Math.round(this.localPlayer.stamina);
+
+                // Compute Camera Screen-shake depending on Ayuwoki horror proximity
+                let proximity = 0;
+                if (this.ayuwoki && this.cycle === "night" && this.localPlayer.hp > 0) {
+                    let dx = this.ayuwoki.x - this.localPlayer.x;
+                    let dy = this.ayuwoki.y - this.localPlayer.y;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
+                    let terrorRadius = 600; // default radius
+                    if (this.ayuwoki.rageStage === 3) terrorRadius = 480;
+                    if (this.ayuwoki.rageStage === 4) terrorRadius = 330;
+                    if (this.ayuwoki.rageStage === 5) terrorRadius = 0;
+
+                    if (dist < terrorRadius && terrorRadius > 0) {
+                        proximity = 1.0 - (dist / terrorRadius);
+                        this.cameraShakeAmount = proximity * 6;
+                        if (Math.random() < 0.05) {
+                            audio.playHeartbeat(proximity);
+                        }
+                    } else {
+                        this.cameraShakeAmount = 0;
+                    }
+                }
+
+                // Viewport Camera Coordinates follow Local Player
+                ctx.save();
+                let shakeX = (Math.random() - 0.5) * this.cameraShakeAmount * (options.shake ? 0.2 : 1.0);
+                let shakeY = (Math.random() - 0.5) * this.cameraShakeAmount * (options.shake ? 0.2 : 1.0);
+                
+                // Jitter effect if low hp
+                if (this.localPlayer.hp < 50 && this.localPlayer.hp > 0) {
+                    let crit = (50 - this.localPlayer.hp) / 50;
+                    shakeX += (Math.random() - 0.5) * crit * 3;
+                    shakeY += (Math.random() - 0.5) * crit * 3;
+                }
+
+                ctx.translate(canvas.width / 2 + shakeX - this.localPlayer.x, canvas.height / 2 + shakeY - this.localPlayer.y);
+
+                // DRAW THE HORROR MAP
+                this.drawGround();
+                this.drawDoorAndStructures();
+                this.drawPickups();
+                this.drawPlayers();
+                
+                // Draw dynamic flashlight / dynamic visual shadow casting
+                ctx.restore();
+                this.drawVignetteAndRaycastShadows(proximity);
+                ctx.save();
+                ctx.translate(canvas.width / 2 + shakeX - this.localPlayer.x, canvas.height / 2 + shakeY - this.localPlayer.y);
+
+                // DRAW OVERLAY EFFECTS ON LAYER TOP
+                this.drawParticles(dt);
+                ctx.restore();
+
+                // Draw Camera Flash visual
+                if (this.cameraFlashActive > 0) {
+                    this.cameraFlashActive--;
+                    if (!options.epilepsy) {
+                        ctx.fillStyle = `rgba(255,255,255,${this.cameraFlashActive / 10})`;
+                        ctx.fillRect(0,0,canvas.width,canvas.height);
+                    }
+                }
+
+                // Draw Blindness frame
+                if (this.blindDuration > 0) {
+                    if (options.epilepsy) {
+                        ctx.fillStyle = "#000";
+                        ctx.fillRect(0,0,canvas.width,canvas.height);
+                        ctx.fillStyle = "#ff0000";
+                        ctx.font = "bold 2rem Courier New";
+                        ctx.textAlign = "center";
+                        ctx.fillText("BLINDED", canvas.width/2, canvas.height/2);
+                    } else {
+                        let op = Math.min(1.0, this.blindDuration);
+                        ctx.fillStyle = `rgba(255,255,255,${op})`;
+                        ctx.fillRect(0,0,canvas.width,canvas.height);
+                    }
+                }
+
+                // Render Progress Action UI
+                if (localInput.useProgress > 0) {
+                    this.drawUseProgressBar();
+                }
+
+                // Draw Mobile Joysticks on Screen HUD
+                if (isMobile) {
+                    this.drawMobileHUD();
+                }
+
+                // Draw Jumpscare Animation
+                if (this.jumpscareActive) {
+                    this.drawJumpscareOverlay();
+                }
+
+                // Render Day Timer
+                this.drawTimeHUD();
+
+                requestAnimationFrame(() => this.updateAndRender());
+            },
+
+            lastUpdateTime: 0,
+
+            drawGround() {
+                // Ground boundaries
+                ctx.fillStyle = "#0a0a0a";
+                ctx.fillRect(0, 0, this.map.width*120, this.map.height*120);
+
+                // Debris and Rust
+                if (this.map && this.map.rust) {
+                    ctx.fillStyle = "#1e110a";
+                    this.map.rust.forEach(r => {
+                        ctx.beginPath();
+                        ctx.arc(r.x, r.y, 4, 0, Math.PI*2);
+                        ctx.fill();
+                    });
+                }
+            },
+
+            drawDoorAndStructures() {
+                if (!this.map) return;
+                for (let y = 0; y < this.map.height; y++) {
+                    for (let x = 0; x < this.map.width; x++) {
+                        const tile = this.map.data[y][x];
+                        if (tile === 1) { // Wall
+                            ctx.fillStyle = "#1e1e1e";
+                            ctx.fillRect(x*120, y*120, 118, 118);
+                            ctx.strokeStyle = "#333";
+                            ctx.lineWidth = 2;
+                            ctx.strokeRect(x*120, y*120, 118, 118);
+                        } else if (tile === 2) { // Tree
+                            ctx.fillStyle = "#112611";
+                            ctx.beginPath();
+                            ctx.arc(x*120 + 60, y*120 + 60, 30, 0, Math.PI*2);
+                            ctx.fill();
+                            ctx.fillStyle = "#3a2107";
+                            ctx.beginPath();
+                            ctx.arc(x*120 + 60, y*120 + 60, 8, 0, Math.PI*2);
+                            ctx.fill();
+                        } else if (tile === 3 || tile === 4) { // Bookshelf or Drawer
+                            const isBookshelf = (tile === 3);
+                            ctx.fillStyle = isBookshelf ? "#5c3a21" : "#422e1b";
+                            ctx.fillRect(x*120 + 15, y*120 + 15, 90, 90);
+                            
+                            // Visual Drawer handles
+                            ctx.fillStyle = "#fff";
+                            ctx.fillRect(x*120 + 50, y*120 + 40, 20, 4);
+
+                            // Indicator if searched
+                            const doorId = `${x},${y}`;
+                            const isSearched = this.drawers[doorId];
+                            ctx.font = "10px Courier New";
+                            ctx.fillStyle = isSearched ? "#555" : "#00ff00";
+                            ctx.textAlign = "center";
+                            ctx.fillText(isSearched ? "[SEARCHED]" : "[E] SEARCH", x*120 + 60, y*120 + 80);
+                        } else if (tile === 5) { // Doors
+                            const doorId = `${x},${y}`;
+                            const syncDoor = this.doors[doorId];
+                            if (syncDoor) {
+                                if (syncDoor.isBroken) {
+                                    // Broken door visual rubble
+                                    ctx.strokeStyle = "rgba(255,0,0,0.5)";
+                                    ctx.lineWidth = 3;
+                                    ctx.beginPath();
+                                    ctx.moveTo(x*120 + 10, y*120 + 60);
+                                    ctx.lineTo(x*120 + 110, y*120 + 60);
+                                    ctx.stroke();
+                                } else if (syncDoor.isOpen) {
+                                    // Open Door
+                                    ctx.strokeStyle = "#00ff00";
+                                    ctx.lineWidth = 4;
+                                    ctx.beginPath();
+                                    ctx.moveTo(x*120 + 10, y*120 + 10);
+                                    ctx.lineTo(x*120 + 10, y*120 + 110);
+                                    ctx.stroke();
+                                } else {
+                                    // Closed Door
+                                    ctx.fillStyle = "#4a4a4a";
+                                    ctx.fillRect(x*120 + 10, y*120 + 45, 100, 30);
+                                    ctx.strokeStyle = "#999";
+                                    ctx.strokeRect(x*120 + 10, y*120 + 45, 100, 30);
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+
+            drawPickups() {
+                this.pickups.forEach(p => {
+                    ctx.fillStyle = "rgba(0, 255, 255, 0.4)";
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 16, 0, Math.PI*2);
+                    ctx.fill();
+
+                    ctx.font = "bold 10px Courier New";
+                    ctx.fillStyle = "#00ffff";
+                    ctx.textAlign = "center";
+                    ctx.fillText(p.item.type.toUpperCase(), p.x, p.y - 20);
+                });
+            },
+
+            drawPlayers() {
+                // Draw dynamic Ayuwoki model
+                if (this.ayuwoki && this.cycle === "night") {
+                    // Render lerp transition positions
+                    if (this.ayuwoki.targetX) {
+                        this.ayuwoki.x += (this.ayuwoki.targetX - this.ayuwoki.x) * 0.35;
+                        this.ayuwoki.y += (this.ayuwoki.targetY - this.ayuwoki.y) * 0.35;
+                    }
+
+                    // Shadow base circle
+                    ctx.fillStyle = "#000000";
+                    ctx.beginPath();
+                    ctx.arc(this.ayuwoki.x, this.ayuwoki.y, 24, 0, Math.PI*2);
+                    ctx.fill();
+
+                    // White creepy hair
+                    ctx.strokeStyle = "#ffffff";
+                    ctx.lineWidth = 2.5;
+                    for (let h = 0; h < 6; h++) {
+                        ctx.beginPath();
+                        ctx.arc(this.ayuwoki.x - 10 + (h*4), this.ayuwoki.y - 12, 10, Math.PI, 0);
+                        ctx.stroke();
+                    }
+
+                    // White glowing eyes
+                    ctx.fillStyle = "#ffffff";
+                    ctx.beginPath();
+                    ctx.arc(this.ayuwoki.x - 8, this.ayuwoki.y, 3, 0, Math.PI*2);
+                    ctx.arc(this.ayuwoki.x + 8, this.ayuwoki.y, 3, 0, Math.PI*2);
+                    ctx.fill();
+
+                    // Horror aura
+                    ctx.strokeStyle = `rgba(255,0,0,${0.3 + Math.sin(Date.now()*0.01)*0.15})`;
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(this.ayuwoki.x, this.ayuwoki.y, 30, 0, Math.PI*2);
+                    ctx.stroke();
+
+                    // Breaking status indicator
+                    if (this.ayuwoki.state === "breaking") {
+                        ctx.font = "bold 11px Courier New";
+                        ctx.fillStyle = "#ff0000";
+                        ctx.textAlign = "center";
+                        ctx.fillText("BREAKING DOOR", this.ayuwoki.x, this.ayuwoki.y - 32);
+                    }
+                }
+
+                // Draw connected Players
+                Object.keys(this.players).forEach(id => {
+                    const p = this.players[id];
+                    
+                    if (id !== this.localPlayerId) {
+                        // Lerp interpolations
+                        p.x += (p.targetX - p.x) * 0.3;
+                        p.y += (p.targetY - p.y) * 0.3;
+                    } else {
+                        // Tie local player coordinate references to internal physics handler
+                        p.x = this.localPlayer.x;
+                        p.y = this.localPlayer.y;
+                    }
+
+                    if (p.hp <= 0) return; // Hide deceased circles
+
+                    // Survivor Base (Blue Circle)
+                    ctx.fillStyle = "#0066cc";
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 20, 0, Math.PI*2);
+                    ctx.fill();
+
+                    // Draw flashlight beam indicators
+                    ctx.strokeStyle = "#ffffff";
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.moveTo(p.x, p.y);
+                    ctx.lineTo(p.x + Math.cos(p.angle)*30, p.y + Math.sin(p.angle)*30);
+                    ctx.stroke();
+
+                    // HP Overlay bars above player
+                    ctx.fillStyle = "rgba(0,0,0,0.6)";
+                    ctx.fillRect(p.x - 20, p.y - 30, 40, 5);
+                    ctx.fillStyle = "#00ff00";
+                    ctx.fillRect(p.x - 20, p.y - 30, (p.hp / 100) * 40, 5);
+
+                    // Display tag name
+                    ctx.font = "11px Courier New";
+                    ctx.fillStyle = "#ffffff";
+                    ctx.textAlign = "center";
+                    ctx.fillText(p.name, p.x, p.y - 36);
+                });
+            },
+
+            // 2D SEGMENT RAYCAST SHADOW TECHNIQUE
+            drawVignetteAndRaycastShadows(proximity) {
+                // Setup ambient overlay matching cycle timers
+                const overlayCanvas = document.createElement("canvas");
+                overlayCanvas.width = canvas.width;
+                overlayCanvas.height = canvas.height;
+                const oCtx = overlayCanvas.getContext("2d");
+
+                let ambientOpacity = 0.15; // default Day prep
+                if (this.cycle === "night") {
+                    ambientOpacity = 0.55; // Base night
+                    if (this.ayuwoki) {
+                        if (this.ayuwoki.rageStage === 3) ambientOpacity = 0.65;
+                        if (this.ayuwoki.rageStage === 4) ambientOpacity = 0.85;
+                        if (this.ayuwoki.rageStage === 5) ambientOpacity = 0.98;
+                    }
+                }
+
+                oCtx.fillStyle = `rgba(0, 0, 0, ${ambientOpacity})`;
+                oCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+                if (this.localPlayer.hp > 0 && !this.jumpscareActive) {
+                    // Extract nearby walls to cast boundary segments
+                    const segments = [];
+                    const px = this.localPlayer.x;
+                    const py = this.localPlayer.y;
+
+                    // Collect segments around 400px of player
+                    if (this.map) {
+                        let radiusCells = 5;
+                        let cx = Math.floor(px / 120);
+                        let cy = Math.floor(py / 120);
+
+                        for (let gy = cy - radiusCells; gy <= cy + radiusCells; gy++) {
+                            for (let gx = cx - radiusCells; gx <= cx + radiusCells; gx++) {
+                                if (gx < 0 || gy < 0 || gx >= this.map.width || gy >= this.map.height) continue;
+                                const tile = this.map.data[gy][gx];
+                                let isSolid = (tile === 1 || tile === 2);
+                                if (tile === 5) {
+                                    const dSync = this.doors[`${gx},${gy}`];
+                                    if (dSync && !dSync.isOpen && !dSync.isBroken) isSolid = true;
+                                }
+
+                                if (isSolid) {
+                                    let x1 = gx * 120;
+                                    let y1 = gy * 120;
+                                    let x2 = x1 + 120;
+                                    let y2 = y1 + 120;
+                                    
+                                    // Segment borders
+                                    segments.push({a: {x:x1, y:y1}, b: {x:x2, y:y1}});
+                                    segments.push({a: {x:x2, y:y1}, b: {x:x2, y:y2}});
+                                    segments.push({a: {x:x2, y:y2}, b: {x:x1, y:y2}});
+                                    segments.push({a: {x:x1, y:y2}, b: {x:x1, y:y1}});
+                                }
+                            }
+                        }
+                    }
+
+                    // Cast lines over 90 degree flashlight FOV
+                    const numRays = 120;
+                    const fov = Math.PI * 0.5; // 90 degree flashlight cone
+                    const range = 400;
+                    const startAngle = localInput.angle - fov/2;
+
+                    const points = [];
+                    points.push({x: canvas.width/2, y: canvas.height/2});
+
+                    for (let r = 0; r <= numRays; r++) {
+                        let angle = startAngle + (fov * (r / numRays));
+                        let dx = Math.cos(angle);
+                        let dy = Math.sin(angle);
+                        let rayEnd = {x: px + dx*range, y: py + dy*range};
+
+                        // Check closest segment intersections
+                        let minT = 1.0;
+                        segments.forEach(seg => {
+                            let inter = this.getIntersection(
+                                {x: px, y: py},
+                                {x: px + dx*range, y: py + dy*range},
+                                seg.a,
+                                seg.b
+                            );
+                            if (inter && inter.param < minT) {
+                                minT = inter.param;
+                                rayEnd = inter;
+                            }
+                        });
+
+                        // Convert back to Screen offsets relative to center
+                        points.push({
+                            x: canvas.width/2 + (rayEnd.x - px),
+                            y: canvas.height/2 + (rayEnd.y - py)
+                        });
+                    }
+
+                    // Carve flashlight cone out of ambient overlay canvas
+                    oCtx.save();
+                    oCtx.globalCompositeOperation = "destination-out";
+                    oCtx.fillStyle = "rgba(0,0,0,1)";
+                    oCtx.beginPath();
+                    oCtx.moveTo(points[0].x, points[0].y);
+                    for (let p = 1; p < points.length; p++) {
+                        oCtx.lineTo(points[p].x, points[p].y);
+                    }
+                    oCtx.closePath();
+                    oCtx.fill();
+
+                    // Carve tiny inner ambient circle around local player
+                    oCtx.beginPath();
+                    oCtx.arc(canvas.width/2, canvas.height/2, 35, 0, Math.PI*2);
+                    oCtx.fill();
+                    oCtx.restore();
+                }
+
+                // Render compiled lighting overlay mask
+                ctx.drawImage(overlayCanvas, 0, 0);
+
+                // Render low health/critical screen damage overlays
+                if (this.localPlayer.hp < 50 && this.localPlayer.hp > 0) {
+                    let factor = (50 - this.localPlayer.hp) / 50; // up to 1.0
+                    ctx.strokeStyle = `rgba(200, 0, 0, ${factor * 0.45})`;
+                    ctx.lineWidth = 15;
+                    ctx.strokeRect(0, 0, canvas.width, canvas.height);
+                }
+            },
+
+            getIntersection(p0, p1, p2, p3) {
+                let s1_x = p1.x - p0.x;
+                let s1_y = p1.y - p0.y;
+                let s2_x = p3.x - p2.x;
+                let s2_y = p3.y - p2.y;
+
+                let s = (-s1_y * (p0.x - p2.x) + s1_x * (p0.y - p2.y)) / (-s2_x * s1_y + s1_x * s2_y);
+                let t = (s2_x * (p0.y - p2.y) - s2_y * (p0.x - p2.x)) / (-s2_x * s1_y + s1_x * s2_y);
+
+                if (s >= 0 && s <= 1 && t >= 0 && t <= 1) {
+                    return {
+                        x: p0.x + (t * s1_x),
+                        y: p0.y + (t * s1_y),
+                        param: t
+                    };
+                }
+                return null;
+            },
+
+            drawParticles(dt) {
+                // Generate simple environment ambient dust
+                if (Math.random() < 0.1 && this.particles.length < 50) {
+                    this.particles.push({
+                        x: this.localPlayer.x + (Math.random() - 0.5) * 800,
+                        y: this.localPlayer.y + (Math.random() - 0.5) * 800,
+                        vx: (Math.random() - 0.5) * 10,
+                        vy: (Math.random() - 0.5) * 10,
+                        life: 3.0
+                    });
+                }
+
+                ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    let p = this.particles[i];
+                    p.x += p.vx * dt;
+                    p.y += p.vy * dt;
+                    p.life -= dt;
+                    if (p.life <= 0) {
+                        this.particles.splice(i, 1);
+                        continue;
+                    }
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 2, 0, Math.PI*2);
+                    ctx.fill();
+                }
+            },
+
+            drawUseProgressBar() {
+                const px = canvas.width / 2;
+                const py = canvas.height - 120;
+                const pct = 1.0 - (localInput.useProgress / localInput.useTargetDuration);
+                
+                ctx.fillStyle = "rgba(0,0,0,0.8)";
+                ctx.fillRect(px - 100, py, 200, 15);
+                ctx.fillStyle = "#ff0000";
+                ctx.fillRect(px - 100, py, pct * 200, 15);
+
+                ctx.font = "bold 11px Courier New";
+                ctx.fillStyle = "#fff";
+                ctx.textAlign = "center";
+                ctx.fillText(`USING: ${localInput.useItemName.toUpperCase()}`, px, py - 6);
+            },
+
+            drawMobileHUD() {
+                // Left Joystick drawing
+                if (touchState.leftTouchId !== null) {
+                    ctx.fillStyle = "rgba(255, 255, 255, 0.1)";
+                    ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(touchState.leftStart.x, touchState.leftStart.y, 50, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // Knob position
+                    ctx.fillStyle = "rgba(255, 0, 0, 0.4)";
+                    ctx.beginPath();
+                    ctx.arc(touchState.leftMove.x, touchState.leftMove.y, 20, 0, Math.PI*2);
+                    ctx.fill();
+                }
+
+                // Right Joystick drawing
+                if (touchState.rightTouchId !== null) {
+                    ctx.fillStyle = "rgba(255, 255, 255, 0.1)";
+                    ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(touchState.rightStart.x, touchState.rightStart.y, 50, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    ctx.fillStyle = "rgba(255, 0, 0, 0.4)";
+                    ctx.beginPath();
+                    ctx.arc(touchState.rightMove.x, touchState.rightMove.y, 20, 0, Math.PI*2);
+                    ctx.fill();
+                }
+            },
+
+            drawJumpscareOverlay() {
+                let elapsed = Date.now() - this.jumpscareTime;
+                if (elapsed < 2000) {
+                    // Flash screen
+                    if (!options.epilepsy) {
+                        ctx.fillStyle = (Math.floor(elapsed / 50) % 2 === 0) ? "#ff0000" : "#000";
+                        ctx.fillRect(0,0,canvas.width,canvas.height);
+                    } else {
+                        ctx.fillStyle = "#000000";
+                        ctx.fillRect(0,0,canvas.width,canvas.height);
+                    }
+
+                    // Draw scary huge white hair/glowing eye sketch
+                    ctx.fillStyle = "#ffffff";
+                    ctx.font = "bold 5rem Courier New";
+                    ctx.textAlign = "center";
+                    ctx.fillText("AYUWOKI", canvas.width/2, canvas.height/2);
+                    
+                    ctx.fillStyle = "#ff0000";
+                    ctx.font = "1.5rem Courier New";
+                    ctx.fillText("S H E E S H", canvas.width/2, canvas.height/2 + 70);
+                } else {
+                    this.jumpscareActive = false;
+                }
+            },
+
+            drawTimeHUD() {
+                ctx.fillStyle = "#ff0000";
+                ctx.font = "bold 14px Courier New";
+                ctx.textAlign = "center";
+                let m = Math.floor(this.timeLeft / 60);
+                let s = Math.floor(this.timeLeft % 60);
+                let displaySec = s < 10 ? "0" + s : s;
+                
+                let cycleText = this.cycle === "day" ? "DAY PREPARATION (SAFE)" : "NIGHT SHIFT (DANGER)";
+                ctx.fillText(`${cycleText} - ${m}:${displaySec}`, canvas.width / 2, 35);
+            }
+        };
+
+        // EVENT LISTENERS PC (INPUTS)
+        window.addEventListener("keydown", (e) => {
+            if (!game.inRoom) return;
+            const k = e.key.toLowerCase();
+            if (k === 'w') localInput.w = true;
+            if (k === 's') localInput.s = true;
+            if (k === 'a') localInput.a = true;
+            if (k === 'd') localInput.d = true;
+            if (e.key === 'Shift') {
+                localInput.shift = true;
+                touchState.isSprinting = true;
+            }
+            if (k === 'q') game.dropItem();
+            if (k === 'e') game.interact();
+
+            // Slots selection
+            if (k >= '1' && k <= '6') {
+                game.setActiveSlot(parseInt(k) - 1);
+            }
         });
+
+        window.addEventListener("keyup", (e) => {
+            if (!game.inRoom) return;
+            const k = e.key.toLowerCase();
+            if (k === 'w') localInput.w = false;
+            if (k === 's') localInput.s = false;
+            if (k === 'a') localInput.a = false;
+            if (k === 'd') localInput.d = false;
+            if (e.key === 'Shift') {
+                localInput.shift = false;
+                touchState.isSprinting = false;
+            }
+        });
+
+        window.addEventListener("mousemove", (e) => {
+            if (!game.inRoom) return;
+            const dx = e.clientX - canvas.width/2;
+            const dy = e.clientY - canvas.height/2;
+            localInput.angle = Math.atan2(dy, dx);
+        });
+
+        window.addEventListener("click", (e) => {
+            // Check if user clicked options or game canvas elements
+            if (!game.inRoom) return;
+            if (e.clientY < canvas.height - 100) {
+                game.useActiveItem();
+            }
+        });
+
+        // TOUCH CONTROLS MOBILE
+        canvas.addEventListener("touchstart", (e) => {
+            if (!game.inRoom) return;
+            for (let t = 0; t < e.changedTouches.length; t++) {
+                let touch = e.changedTouches[t];
+                if (touch.clientX < canvas.width / 2) {
+                    // Left movement joystick
+                    touchState.leftTouchId = touch.identifier;
+                    touchState.leftStart = {x: touch.clientX, y: touch.clientY};
+                    touchState.leftMove = {x: touch.clientX, y: touch.clientY};
+                    // Double touch triggers sprint on mobile
+                    touchState.isSprinting = true;
+                } else {
+                    // Right look joystick
+                    touchState.rightTouchId = touch.identifier;
+                    touchState.rightStart = {x: touch.clientX, y: touch.clientY};
+                    touchState.rightMove = {x: touch.clientX, y: touch.clientY};
+                }
+            }
+        }, {passive:true});
+
+        canvas.addEventListener("touchmove", (e) => {
+            if (!game.inRoom) return;
+            for (let t = 0; t < e.changedTouches.length; t++) {
+                let touch = e.changedTouches[t];
+                if (touch.identifier === touchState.leftTouchId) {
+                    let dx = touch.clientX - touchState.leftStart.x;
+                    let dy = touch.clientY - touchState.leftStart.y;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist > 50) {
+                        touchState.leftMove = {
+                            x: touchState.leftStart.x + (dx/dist)*50,
+                            y: touchState.leftStart.y + (dy/dist)*50
+                        };
+                    } else {
+                        touchState.leftMove = {x: touch.clientX, y: touch.clientY};
+                    }
+                } else if (touch.identifier === touchState.rightTouchId) {
+                    let dx = touch.clientX - touchState.rightStart.x;
+                    let dy = touch.clientY - touchState.rightStart.y;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist > 50) {
+                        touchState.rightMove = {
+                            x: touchState.rightStart.x + (dx/dist)*50,
+                            y: touchState.rightStart.y + (dy/dist)*50
+                        };
+                    } else {
+                        touchState.rightMove = {x: touch.clientX, y: touch.clientY};
+                    }
+                    localInput.angle = Math.atan2(dy, dx);
+                }
+            }
+        }, {passive:true});
+
+        canvas.addEventListener("touchend", (e) => {
+            if (!game.inRoom) return;
+            for (let t = 0; t < e.changedTouches.length; t++) {
+                let touch = e.changedTouches[t];
+                if (touch.identifier === touchState.leftTouchId) {
+                    touchState.leftTouchId = null;
+                    touchState.isSprinting = false;
+                } else if (touch.identifier === touchState.rightTouchId) {
+                    touchState.rightTouchId = null;
+                }
+            }
+        }, {passive:true});
+
+        // Touch handlers for on-screen mobile utility buttons
+        document.getElementById("mobileDrop").addEventListener("touchstart", (e) => {
+            e.preventDefault();
+            game.dropItem();
+        });
+        document.getElementById("mobileInteract").addEventListener("touchstart", (e) => {
+            e.preventDefault();
+            game.interact();
+        });
+        document.getElementById("mobileUse").addEventListener("touchstart", (e) => {
+            e.preventDefault();
+            game.useActiveItem();
+        });
+
+        // INIT SYSTEM
+        window.onload = () => {
+            connectSocket();
+            game.updateAndRender();
+        };
     </script>
 </body>
 </html>
