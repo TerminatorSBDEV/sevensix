@@ -6,1931 +6,2654 @@
     <title>Survive the Ayuwoki</title>
     <style>
         :root {
-            --glow-red: #ff0000;
-            --dark-bg: #030303;
-            --panel-bg: rgba(10, 10, 10, 0.95);
-            --border-glow: 1px solid rgba(255, 0, 0, 0.3);
+            --primary: #ff0000;
+            --primary-glow: #800000;
+            --background: #050505;
+            --hud-bg: rgba(10, 10, 10, 0.85);
         }
 
         * {
             box-sizing: border-box;
             user-select: none;
-            margin: 0;
-            padding: 0;
-            font-family: 'Courier New', Courier, monospace;
+            -webkit-user-select: none;
         }
 
         body, html {
+            margin: 0;
+            padding: 0;
             width: 100%;
             height: 100%;
-            overflow: hidden;
-            background-color: var(--dark-bg);
+            background-color: var(--background);
             color: #ffffff;
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
         }
 
-        /* Loading & Menu Screens */
-        .overlay-screen {
+        /* Scanlines Overlay */
+        .scanlines {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            background-size: 100% 4px, 6px 100%;
+            z-index: 9999;
+            pointer-events: none;
+        }
+
+        /* UI Screens */
+        .screen {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: var(--dark-bg);
-            z-index: 100;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
             display: flex;
             flex-direction: column;
-            justify-content: center;
             align-items: center;
-            transition: opacity 0.5s ease;
+            justify-content: center;
+            z-index: 10;
         }
 
         .hidden {
             display: none !important;
-            opacity: 0;
         }
 
-        /* Red bloody flickering title */
-        @keyframes flicker {
-            0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
-                text-shadow: 0 0 5px var(--glow-red), 0 0 15px var(--glow-red), 0 0 30px #800000;
-                opacity: 1;
-            }
-            20%, 24%, 55% {
-                text-shadow: none;
-                opacity: 0.4;
-            }
+        /* Loading Screen */
+        #loading-screen {
+            background-color: #000;
         }
 
-        .flicker-title {
-            color: var(--glow-red);
-            font-size: 2.8rem;
-            font-weight: bold;
+        .pulse-text {
+            color: var(--primary);
+            font-size: 1.5rem;
+            text-shadow: 0 0 10px var(--primary-glow);
+            animation: pulse 1.5s infinite alternate;
+        }
+
+        /* Main Menu */
+        #main-menu {
+            background: radial-gradient(circle, #1a0000 0%, #000000 80%);
+        }
+
+        .bloody-title {
+            color: var(--primary);
+            font-size: 2.5rem;
             text-align: center;
-            animation: flicker 4s infinite;
+            font-weight: bold;
+            letter-spacing: 5px;
+            text-shadow: 0 0 10px var(--primary-glow), 0 0 20px #000;
+            animation: flicker 1.8s infinite alternate;
             margin-bottom: 5px;
-            letter-spacing: 2px;
         }
 
-        .version-tag {
-            font-size: 0.9rem;
-            color: #555;
-            margin-bottom: 25px;
-        }
-
-        .active-counter {
+        .online-counter {
             display: flex;
             align-items: center;
-            gap: 10px;
-            margin-bottom: 30px;
-            font-size: 1.1rem;
-            color: #00ff00;
+            font-size: 1rem;
+            margin-bottom: 40px;
+            color: #aaaaaa;
         }
 
-        .glowing-ball {
+        .glow-ball {
             width: 12px;
             height: 12px;
-            background-color: #00ff00;
+            background-color: #39ff14;
             border-radius: 50%;
-            box-shadow: 0 0 10px #00ff00;
+            box-shadow: 0 0 10px #39ff14, 0 0 20px #20c20f;
+            margin-right: 10px;
         }
 
-        .menu-buttons {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            width: 320px;
-        }
-
-        button {
-            background: rgba(20, 0, 0, 0.6);
-            border: 1px solid rgba(255, 0, 0, 0.4);
+        /* Buttons */
+        .btn {
+            background: rgba(40, 0, 0, 0.6);
+            border: 2px solid var(--primary);
             color: #ffffff;
-            padding: 14px 20px;
+            padding: 12px 30px;
             font-size: 1.1rem;
+            font-family: inherit;
             cursor: pointer;
-            transition: all 0.2s ease;
+            width: 280px;
+            margin: 10px 0;
+            transition: all 0.3s;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            outline: none;
+            box-shadow: 0 0 5px var(--primary-glow);
+            text-align: center;
         }
 
-        button:hover {
-            background: rgba(255, 0, 0, 0.2);
-            border-color: var(--glow-red);
-            box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
-            transform: scale(1.02);
+        .btn:hover {
+            background: var(--primary);
+            color: #000000;
+            box-shadow: 0 0 15px var(--primary);
+            font-weight: bold;
         }
 
-        /* Modal Panels */
-        .modal-panel {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+        /* Modals & Dialogs */
+        .modal {
+            background: rgba(15, 5, 5, 0.95);
+            border: 3px solid var(--primary);
             width: 90%;
             max-width: 550px;
-            background: var(--panel-bg);
-            border: 2px solid var(--glow-red);
-            box-shadow: 0 0 20px rgba(255, 0, 0, 0.4);
+            max-height: 85vh;
             padding: 25px;
-            z-index: 110;
-            max-height: 85%;
             overflow-y: auto;
+            position: relative;
+            box-shadow: 0 0 30px rgba(255, 0, 0, 0.3);
         }
 
         .modal-title {
-            color: var(--glow-red);
-            font-size: 1.6rem;
-            margin-bottom: 20px;
-            border-bottom: 1px solid rgba(255, 0, 0, 0.3);
-            padding-bottom: 10px;
+            color: var(--primary);
             text-align: center;
+            font-size: 1.6rem;
+            margin-top: 0;
+            text-transform: uppercase;
+            border-bottom: 2px solid var(--primary);
+            padding-bottom: 10px;
         }
 
-        .options-list, .instructions-content {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            margin-bottom: 20px;
-            font-size: 0.95rem;
-            line-height: 1.4;
+        .close-btn {
+            position: absolute;
+            top: 10px; right: 15px;
+            color: #fff; font-size: 1.5rem; cursor: pointer;
         }
 
+        /* Options */
         .option-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 8px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            margin: 15px 0;
+            padding-bottom: 10px;
+            border-bottom: 1px dashed rgba(255,0,0,0.2);
         }
 
-        .option-label {
-            color: #ddd;
-        }
-
-        select, input[type="text"], input[type="range"] {
-            background: #111;
-            border: 1px solid rgba(255, 0, 0, 0.3);
-            color: #fff;
-            padding: 6px 10px;
-            outline: none;
-            width: 180px;
-        }
-
-        input[type="range"] {
-            width: 130px;
-            accent-color: var(--glow-red);
-        }
-
-        /* Server list specifics */
-        .server-grid {
-            border: 1px solid rgba(255, 0, 0, 0.2);
+        .option-row input[type="text"] {
             background: #000;
-            max-height: 200px;
+            border: 1px solid var(--primary);
+            color: #fff;
+            padding: 5px;
+            font-family: inherit;
+            width: 60%;
+        }
+
+        .toggle-btn {
+            background: #220000;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            padding: 5px 15px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .toggle-btn.active {
+            background: var(--primary);
+            color: #000;
+        }
+
+        /* Lobby and Create Server Form */
+        .lobby-list {
+            border: 1px solid var(--primary);
+            background: #000;
+            height: 250px;
             overflow-y: auto;
             margin-bottom: 15px;
         }
 
-        .server-item {
+        .lobby-item {
             display: flex;
             justify-content: space-between;
-            padding: 10px 15px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 10px;
+            border-bottom: 1px solid rgba(255,0,0,0.2);
             cursor: pointer;
         }
 
-        .server-item:hover {
+        .lobby-item:hover {
             background: rgba(255, 0, 0, 0.1);
         }
 
-        .help-link {
-            color: #ff9999;
-            text-decoration: underline;
-            cursor: pointer;
-            font-size: 0.85rem;
-            margin-top: 5px;
-            display: inline-block;
+        /* Game Interface */
+        #game-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
         }
 
-        /* In-game UI Canvas Overlay */
-        #gameCanvas {
+        canvas {
             display: block;
             width: 100%;
             height: 100%;
         }
 
+        /* HUD Overlay */
         #hud {
             position: absolute;
-            top: 15px;
-            left: 15px;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
             display: flex;
             flex-direction: column;
-            gap: 8px;
-            z-index: 10;
-            pointer-events: none;
+            justify-content: space-between;
+            padding: 15px;
         }
 
-        .hud-bar {
-            width: 220px;
-            height: 20px;
-            background: rgba(0,0,0,0.6);
-            border: 1px solid #333;
+        .hud-top {
+            display: flex;
+            justify-content: space-between;
+            pointer-events: auto;
+        }
+
+        .stats-panel {
+            background: var(--hud-bg);
+            border: 1px solid var(--primary);
+            padding: 10px;
+            width: 250px;
+        }
+
+        .bar-container {
+            height: 15px;
+            background: #222;
+            border: 1px solid #444;
+            margin: 5px 0;
             position: relative;
         }
 
-        .hud-fill {
+        .bar {
             height: 100%;
             width: 100%;
             transition: width 0.1s linear;
         }
 
-        #hpFill { background-color: #cc0000; }
-        #staminaFill { background-color: #00aa00; }
+        #hp-bar { background: #d11a1a; }
+        #stamina-bar { background: #1a9bd1; }
 
-        .hud-text {
+        .bar-text {
             position: absolute;
-            width: 100%;
-            text-align: center;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 0.75rem;
-            font-weight: bold;
-            color: #fff;
-            text-shadow: 1px 1px 2px #000;
+            top: 0; left: 0; width: 100%; height: 100%;
+            text-align: center; font-size: 0.75rem; font-weight: bold;
+            line-height: 13px; color: #fff;
         }
 
         /* Hotbar Slots */
-        #hotbar {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 10px;
-            z-index: 10;
-        }
-
-        .hotbar-slot {
-            width: 55px;
-            height: 55px;
-            background: rgba(10, 10, 10, 0.85);
-            border: 2px solid rgba(255,255,255,0.2);
+        .hud-bottom {
             display: flex;
             flex-direction: column;
-            justify-content: center;
             align-items: center;
+            width: 100%;
+        }
+
+        .inventory-bar {
+            display: flex;
+            background: var(--hud-bg);
+            border: 2px solid var(--primary);
+            padding: 5px;
+            pointer-events: auto;
+        }
+
+        .inv-slot {
+            width: 55px; height: 55px;
+            border: 1px solid #444;
+            margin: 0 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
             position: relative;
+            background: #111;
+            font-size: 0.65rem;
             cursor: pointer;
         }
 
-        .hotbar-slot.active {
-            border-color: var(--glow-red);
-            box-shadow: 0 0 8px rgba(255,0,0,0.6);
+        .inv-slot.active {
+            border: 2px solid var(--primary);
+            background: #200;
         }
 
-        .slot-num {
+        .inv-qty {
             position: absolute;
-            top: 2px;
-            left: 4px;
-            font-size: 0.65rem;
-            color: #666;
+            top: 2px; right: 4px;
+            font-weight: bold;
         }
 
-        .slot-icon {
-            font-size: 1.5rem;
+        .inv-name {
+            text-align: center;
+            margin-bottom: 2px;
+            font-size: 0.55rem;
+            word-break: break-all;
         }
 
-        .slot-stack {
+        /* Notifications & Horror Effects */
+        #rage-alert {
             position: absolute;
-            bottom: 2px;
-            right: 4px;
-            font-size: 0.7rem;
-            color: #00ff00;
-        }
-
-        /* Notifications & Horror Warnings */
-        #notifications {
-            position: absolute;
-            top: 80px;
-            left: 50%;
+            top: 15%; left: 50%;
             transform: translateX(-50%);
-            width: 80%;
-            max-width: 500px;
-            z-index: 20;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            pointer-events: none;
             text-align: center;
+            z-index: 100;
+            pointer-events: none;
+            width: 85%;
         }
 
-        .notification {
-            background: rgba(0,0,0,0.85);
-            border: 1px dashed rgba(255,0,0,0.5);
-            padding: 10px;
-            animation: fadeIn 0.3s ease;
-        }
-
-        .notif-title {
-            color: #ff3333;
-            font-size: 1.2rem;
+        .rage-alert-title {
+            color: var(--primary);
+            font-size: 2rem;
             font-weight: bold;
-            margin-bottom: 4px;
-            text-transform: uppercase;
+            text-shadow: 0 0 10px var(--primary-glow);
+            margin: 0;
+            animation: text-shake 0.3s infinite;
         }
 
-        .notif-body {
-            color: #eee;
-            font-size: 0.85rem;
+        .rage-alert-sub {
+            color: #ffffff;
+            font-size: 0.95rem;
+            margin: 5px 0 0 0;
         }
 
-        /* Mobile Controls */
-        .mobile-btn {
+        /* Screen Flashes and Jitters */
+        #flash-overlay {
             position: absolute;
-            width: 65px;
-            height: 65px;
-            background: rgba(30, 0, 0, 0.6);
-            border: 2px solid rgba(255, 0, 0, 0.4);
-            border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 15;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 95;
+            background-color: transparent;
+        }
+
+        #interaction-prompt {
+            position: absolute;
+            bottom: 120px; left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            border: 1px solid var(--primary);
             color: #fff;
-            font-size: 0.9rem;
-            font-weight: bold;
+            padding: 8px 15px;
+            border-radius: 4px;
+            font-size: 1rem;
+            pointer-events: none;
+            z-index: 90;
         }
 
-        #mobileDrop {
-            bottom: 90px;
-            right: 15px;
-        }
-
-        #mobileInteract {
-            bottom: 15px;
-            right: 90px;
-        }
-
-        #mobileUse {
-            bottom: 90px;
-            right: 90px;
-            width: 75px;
-            height: 75px;
-            background: rgba(100, 0, 0, 0.4);
-        }
-
-        /* Respawn Overlay */
-        #spectateUI {
+        /* Virtual Joysticks & Mobile Buttons */
+        .joystick-container {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.85);
-            z-index: 50;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
+            bottom: 30px;
+            width: 110px;
+            height: 110px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            border-radius: 50%;
+            touch-action: none;
+            z-index: 80;
+            pointer-events: auto;
         }
 
-        .death-title {
-            color: var(--glow-red);
-            font-size: 3rem;
-            font-weight: bold;
-            animation: flicker 2s infinite;
-            margin-bottom: 40px;
-            text-align: center;
-        }
+        #joystick-left { left: 40px; }
+        #joystick-right { right: 40px; }
 
-        #pingDisplay {
+        .joystick-knob {
             position: absolute;
-            top: 15px;
-            right: 15px;
-            z-index: 10;
-            font-size: 0.8rem;
-            color: #999;
+            width: 44px;
+            height: 44px;
+            background: rgba(255, 255, 255, 0.45);
+            border-radius: 50%;
+            left: 31px;
+            top: 31px;
             pointer-events: none;
         }
 
-        /* Utility classes */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
+        .mobile-btn-container {
+            position: absolute;
+            bottom: 160px;
+            right: 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            pointer-events: auto;
+            z-index: 80;
+        }
+
+        .mob-action-btn {
+            width: 65px; height: 65px;
+            background: rgba(100, 0, 0, 0.7);
+            border: 2px solid var(--primary);
+            border-radius: 50%;
+            color: #fff;
+            font-weight: bold;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-transform: uppercase;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+
+        /* Death & Jumpscare Overlays */
+        #jumpscare-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #000;
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #spectator-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: transparent;
+            z-index: 150;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            padding: 40px;
+        }
+
+        /* Animations */
+        @keyframes pulse {
+            from { opacity: 0.4; }
+            to { opacity: 1; }
+        }
+
+        @keyframes flicker {
+            0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
+                opacity: 1;
+                text-shadow: 0 0 10px var(--primary-glow), 0 0 20px #000;
+            }
+            20%, 24%, 55% {
+                opacity: 0.35;
+                text-shadow: none;
+            }
+        }
+
+        @keyframes text-shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(0px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(2px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(2px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
         }
     </style>
 </head>
 <body>
+    <div class="scanlines"></div>
 
-    <!-- CONFIGURATION SECTION -->
-    <script>
-        // REPLACE WITH GENERATED LINK FOR REMOTE PLAY (E.G. 'wss://your-link.trycloudflare.com')
-        // LEAVE AS "" TO AUTO-DETECT LOCAL SYSTEM IP/HOST ADDRESS
-        const CLOUDFLARE_TUNNEL_URL = "https://clinics-ellen-automobiles-aqua.trycloudflare.com"; 
-    </script>
-
-    <!-- LOADING SCREEN -->
-    <div id="loadingScreen" class="overlay-screen">
-        <div class="flicker-title">CONNECTING...</div>to
-        <p style="color: #666; margin-top: 15px;">Establishing connection to the main frame</p>
+    <!-- 1. LOADING SCREEN -->
+    <div id="loading-screen" class="screen">
+        <h2 class="pulse-text">CONNECTING TO THE AYUWOKI MULTIPLAYER NETWORK...</h2>
+        <div style="margin-top:20px; color:#555;">Server URL Port: 8005</div>
     </div>
 
-    <!-- MAIN MENU -->
-    <div id="mainMenu" class="overlay-screen hidden">
-        <div class="flicker-title">SURVIVE THE AYUWOKI</div>
-        <div class="version-tag">v1.0</div>
+    <!-- 2. MAIN MENU -->
+    <div id="main-menu" class="screen hidden">
+        <h1 class="bloody-title">SURVIVE THE AYUWOKI - v1.0</h1>
+        <div class="online-counter">
+            <span class="glow-ball"></span>
+            <span id="active-players-txt">* active users: 0</span>
+        </div>
         
-        <div class="active-counter">
-            <div class="glowing-ball"></div>
-            <span>* active users: <span id="onlineCount">0</span></span>
-        </div>
+        <button class="btn" onclick="openScreen('lobby-modal')">Ahead to the Game</button>
+        <button class="btn" onclick="openScreen('options-modal')">Options</button>
+        <button class="btn" onclick="openScreen('instructions-modal')">Instructions</button>
+    </div>
 
-        <div class="menu-buttons">
-            <button onclick="ui.openServerBrowser()">AHEAD TO THE GAME</button>
-            <button onclick="ui.showPanel('optionsPanel')">OPTIONS</button>
-            <button onclick="ui.showPanel('instructionsPanel')">INSTRUCTIONS</button>
+    <!-- 3. INSTRUCTIONS MODAL -->
+    <div id="instructions-modal" class="screen hidden">
+        <div class="modal">
+            <span class="close-btn" onclick="openScreen('main-menu')">&times;</span>
+            <h2 class="modal-title">Instructions</h2>
+            <div style="font-size:0.85rem; line-height:1.4rem;">
+                <p><strong>GOAL:</strong> Survive the eternal dread. Map structures hold materials essential for staying alive. Day is safe; prepare before the Night takes over.</p>
+                <p><strong>DAY CYCLE (1 min):</strong> The Ayuwoki retreats. Storage containers (Drawers/Bookshelves) have a 70% chance to refresh and restock items.</p>
+                <p><strong>NIGHT CYCLE (5 min):</strong> Darkness strikes. The Ayuwoki emerges to hunt down the closest survivor. Close metal doors to buy time; he will violently shake and tear them down!</p>
+                <p><strong>ITEMS:</strong>
+                    <br>1. <strong>Bandage:</strong> Recover 50 Health. (8s cast)
+                    <br>2. <strong>Camera:</strong> Flash triggers a 2.5s stun on Ayuwoki. Blinds players. (20s Cooldown)
+                    <br>3. <strong>Energy Drink:</strong> Restores and locks stamina for 3s. (4s cast)
+                    <br>4. <strong>Snickers:</strong> Gain 1.5x speed for 10s, +35 stamina, and +20 HP. (1s cast)
+                    <br>5. <strong>Baseball Bat:</strong> Melee strike stuns Ayuwoki for 5s (breaks on hit). (1.5s Cooldown on miss)
+                    <br>6. <strong>Medicine:</strong> Restores 2 HP every 0.5s up to 100 HP. (1s cast, breaks on hit)
+                </p>
+                <p><strong>CONTROLS:</strong>
+                    <br>• <strong>PC:</strong> WASD to move | SHIFT to sprint | MOUSE to turn | E to interact | Q to drop item | Keys 1-6 to select/use slots.
+                    <br>• <strong>MOBILE:</strong> Use left virtual joystick to move, right joystick to rotate. Use the UI buttons to sprint, drop, use, or interact.
+                </p>
+            </div>
+            <center><button class="btn" style="width:180px; margin-top:15px;" onclick="openScreen('main-menu')">Close</button></center>
         </div>
     </div>
 
-    <!-- INSTRUCTIONS MODAL -->
-    <div id="instructionsPanel" class="modal-panel hidden">
-        <div class="modal-title">SURVIVAL MEMORANDUM</div>
-        <div class="instructions-content">
-            <p><strong>DAY CYCLE (1 min):</strong> Preparation stage. The creature stays hidden. Loot spawns in bookshelves & drawers (70% chance of respawn). Search them carefully.</p>
-            <p><strong>NIGHT CYCLE (5 mins):</strong> The Ayuwoki awakens. He always moves toward the closest survivor. Use your flashlight to navigate, but watch your battery.</p>
-            <p><strong>AWARENESS:</strong> The closer you get to the terror radius, the more your screen will glitch. If he spots you, run!</p>
-            <p><strong>ITEMS:</strong> Use bandages, drinks, bats, and cameras from drawers. If blinded, players see light or dark (epileptic). If Ayuwoki is blinded, he is stunned.</p>
-            <p><strong>PC CONTROLS:</strong> WASD to Move, SHIFT to Sprint, MOUSE to aim flashlight. Q to drop active item, E to interact (pick up, search, doors). 1-6 keys to switch slots.</p>
-            <p><strong>MOBILE CONTROLS:</strong> Left Virtual Joystick to move, Right Virtual Joystick to turn/aim. Use dedicated on-screen buttons to Drop, Interact, and Use active items.</p>
-        </div>
-        <button style="width: 100%;" onclick="ui.hidePanel('instructionsPanel')">CLOSE</button>
-    </div>
+    <!-- 4. OPTIONS MODAL -->
+    <div id="options-modal" class="screen hidden">
+        <div class="modal">
+            <h2 class="modal-title">Options</h2>
+            
+            <div class="option-row">
+                <span>Reduced Screenshake</span>
+                <button id="opt-screenshake" class="toggle-btn" onclick="toggleOption('screenshake')">OFF</button>
+            </div>
+            <div class="option-row">
+                <span>Epileptic Mode</span>
+                <button id="opt-epileptic" class="toggle-btn" onclick="toggleOption('epileptic')">OFF</button>
+            </div>
+            <div class="option-row">
+                <span>Show FPS and Ping</span>
+                <button id="opt-hudstats" class="toggle-btn" onclick="toggleOption('hudstats')">ON</button>
+            </div>
+            <div class="option-row">
+                <span>Volume Level</span>
+                <input type="range" id="opt-volume" min="10" max="100" value="80" style="width:50%;">
+            </div>
+            <div class="option-row" style="flex-direction:column; align-items:flex-start;">
+                <span style="margin-bottom:8px;">Player Display Name:</span>
+                <input type="text" id="opt-displayname" placeholder="Guest name..." maxlength="20">
+            </div>
 
-    <!-- OPTIONS MODAL -->
-    <div id="optionsPanel" class="modal-panel hidden">
-        <div class="modal-title">CALIBRATIONS</div>
-        <div class="options-list">
-            <div class="option-row">
-                <span class="option-label">Reduced screenshake</span>
-                <select id="optShake">
-                    <option value="false">OFF</option>
-                    <option value="true">ON</option>
-                </select>
+            <div style="display:flex; justify-content:space-around; margin-top:20px;">
+                <button class="btn" style="width:180px;" onclick="applyOptions()">Apply</button>
+                <button class="btn" style="width:180px; background:#440000;" onclick="openScreen('main-menu')">Close</button>
             </div>
-            <div class="option-row">
-                <span class="option-label">Epileptic mode</span>
-                <select id="optEpilepsy">
-                    <option value="false">OFF</option>
-                    <option value="true">ON</option>
-                </select>
-            </div>
-            <div class="option-row">
-                <span class="option-label">Show fps and ping</span>
-                <select id="optFps">
-                    <option value="true">ON</option>
-                    <option value="false">OFF</option>
-                </select>
-            </div>
-            <div class="option-row">
-                <span class="option-label">Sounds volume (10-100)</span>
-                <div>
-                    <input type="range" id="optVolume" min="10" max="100" value="80">
-                    <span id="volumeVal" style="font-size: 0.8rem; vertical-align: middle; margin-left: 5px;">80</span>
-                </div>
-            </div>
-            <div class="option-row">
-                <span class="option-label">Displayname</span>
-                <input type="text" id="optName" placeholder="Leave blank for Guest" maxlength="20">
-            </div>
-        </div>
-        <div style="display: flex; gap: 15px;">
-            <button style="flex: 1;" onclick="ui.applyOptions()">APPLY</button>
-            <button style="flex: 1;" onclick="ui.hidePanel('optionsPanel')">CLOSE</button>
         </div>
     </div>
 
-    <!-- SERVER BROWSER MODAL -->
-    <div id="serverBrowserPanel" class="modal-panel hidden">
-        <div class="modal-title">ACTIVE HORIZONS</div>
-        <div class="server-grid" id="serverGridList">
-            <!-- Dynamic Server Items -->
-            <div style="text-align: center; color: #666; padding: 20px;">Searching networks...</div>
-        </div>
-        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-            <button style="flex: 1;" onclick="ui.showPanel('createServerPanel')">CREATE SERVER</button>
-            <button style="flex: 1;" onclick="ui.hidePanel('serverBrowserPanel')">CLOSE</button>
+    <!-- 5. SERVER LOBBY LOBBY -->
+    <div id="lobby-modal" class="screen hidden">
+        <div class="modal" style="max-width:650px;">
+            <span class="close-btn" onclick="openScreen('main-menu')">&times;</span>
+            <h2 class="modal-title">Available Servers</h2>
+            
+            <div id="lobby-container" class="lobby-list">
+                <!-- Servers populated dynamically -->
+                <div style="text-align:center; padding-top:100px; color:#555;">No active lobbies found...</div>
+            </div>
+
+            <div style="display:flex; justify-content:space-between;">
+                <button class="btn" style="width:48%;" onclick="openScreen('create-server-modal')">Create Server</button>
+                <button class="btn" style="width:48%; background:#440000;" onclick="openScreen('main-menu')">Back</button>
+            </div>
         </div>
     </div>
 
-    <!-- CREATE SERVER MODAL -->
-    <div id="createServerPanel" class="modal-panel hidden">
-        <div class="modal-title">COMMISSION ZONE</div>
-        <div class="options-list">
-            <div class="option-row">
-                <span class="option-label">1 - Name your server:</span>
-                <input type="text" id="srvName" placeholder="My Server" maxlength="20">
+    <!-- 6. CREATE SERVER MODAL -->
+    <div id="create-server-modal" class="screen hidden">
+        <div class="modal">
+            <h2 class="modal-title">Create Server</h2>
+            
+            <div class="option-row" style="flex-direction:column; align-items:flex-start;">
+                <span style="margin-bottom:8px;">1 - Name your server:</span>
+                <input type="text" id="srv-name" placeholder="Server name..." maxlength="20" style="width:100%; background:#000; border:1px solid var(--primary); color:#fff; padding:5px; font-family:inherit;">
             </div>
+            
             <div class="option-row">
-                <span class="option-label">2 - Max people:</span>
-                <select id="srvMax">
-                    <option value="4">4 Survivors</option>
-                    <option value="8" selected>8 Survivors</option>
-                    <option value="12">12 Survivors</option>
-                    <option value="15">15 Survivors</option>
-                </select>
+                <span>2 - Max people (1-15):</span>
+                <input type="number" id="srv-max" min="1" max="15" value="8" style="width:60px; background:#000; border:1px solid var(--primary); color:#fff; padding:5px; font-family:inherit;">
             </div>
+
             <div class="option-row">
-                <span class="option-label">3 - Network ownership:</span>
-                <select id="srvOwnership">
+                <span>3 - Network ownership:</span>
+                <select id="srv-network" style="background:#000; border:1px solid var(--primary); color:#fff; padding:5px; font-family:inherit;">
                     <option value="nearest">Nearest User</option>
                     <option value="host">Server Hoster</option>
                 </select>
             </div>
-            <div style="text-align: right;">
-                <span class="help-link" onclick="ui.showPanel('ownershipExemptionPanel')">learn network ownership types</span>
+            <div style="text-align:right; margin-bottom:15px;">
+                <a href="#" onclick="openScreen('network-info-modal')" style="color:var(--primary); font-size:0.75rem;">Click here to learn more about network ownership</a>
+            </div>
+
+            <div style="display:flex; justify-content:space-around; margin-top:10px;">
+                <button class="btn" style="width:180px;" onclick="submitCreateServer()">Create</button>
+                <button class="btn" style="width:180px; background:#440000;" onclick="openScreen('lobby-modal')">Cancel</button>
             </div>
         </div>
-        <div style="display: flex; gap: 10px;">
-            <button style="flex: 1;" onclick="ui.createServer()">CREATE SERVER</button>
-            <button style="flex: 1;" onclick="ui.hidePanel('createServerPanel')">CANCEL</button>
+    </div>
+
+    <!-- 7. NETWORK INFO MODAL -->
+    <div id="network-info-modal" class="screen hidden">
+        <div class="modal">
+            <h2 class="modal-title" style="font-size:1.1rem;">Nearest Entity vs Server Hoster</h2>
+            <div style="font-size:0.8rem; line-height:1.3rem; margin:15px 0;">
+                <p><strong>Nearest Entity:</strong> The player closest to the Ayuwoki handles the pathfinding and physics calculations, and updates the state. This keeps movement smooth for whoever is interacting directly with the monster, maintaining tension.</p>
+                <p><strong>Server Hoster:</strong> The original host evaluates all map events, and players only render outcomes. This method prevents disputes regarding attacks but may display delayed reactions if the host has high latency.</p>
+            </div>
+            <center><button class="btn" style="width:150px;" onclick="openScreen('create-server-modal')">Go Back</button></center>
         </div>
     </div>
 
-    <!-- OWNERSHIP DESCRIPTION MODAL -->
-    <div id="ownershipExemptionPanel" class="modal-panel hidden">
-        <div class="modal-title">NETWORK MATRIX STRUCTURE</div>
-        <div class="instructions-content">
-            <p><strong>Nearest Entity Ownership:</strong> Coordinates physics dynamically based on proximity. The client closest to the Ayuwoki handles local pathing & collision checks, updating everyone. Minimizes lag for active chases.</p>
-            <p><strong>Server Hoster Ownership:</strong> Relies entirely on the original lobby host to compile coordinates. Secure & predictable, ensuring the server host handles the master calculations. Authority falls back to next connected player if host leaves.</p>
+    <!-- 8. GAME CONTAINER & HUD -->
+    <div id="game-container" class="hidden">
+        <canvas id="gameCanvas"></canvas>
+
+        <div id="hud">
+            <div class="hud-top">
+                <div class="stats-panel">
+                    <div style="font-size:0.8rem; margin-bottom:5px; text-transform:uppercase;" id="hud-player-name">Player Name</div>
+                    <div class="bar-container">
+                        <div id="hp-bar" class="bar" style="width:100%;"></div>
+                        <div class="bar-text">HP: <span id="hp-txt">100</span>/100</div>
+                    </div>
+                    <div class="bar-container">
+                        <div id="stamina-bar" class="bar" style="width:100%;"></div>
+                        <div class="bar-text">STAMINA: <span id="stamina-txt">100</span>/100</div>
+                    </div>
+                </div>
+
+                <div class="stats-panel" style="width:180px; text-align:right;">
+                    <div id="hud-cycle" style="color:var(--primary); font-weight:bold; font-size:1.1rem;">DAY PREP</div>
+                    <div id="hud-timer" style="font-size:1.3rem;">00:00</div>
+                    <div id="stats-ping-fps" style="font-size:0.65rem; color:#888; margin-top:5px;">FPS: 60 | PING: 0ms</div>
+                </div>
+            </div>
+
+            <!-- Horror alerts inside HUD area -->
+            <div id="rage-alert" class="hidden">
+                <p class="rage-alert-title" id="rage-alert-title">RAGE CLIMBED</p>
+                <p class="rage-alert-sub" id="rage-alert-sub">Ayuwoki speed increased!</p>
+            </div>
+
+            <div id="interaction-prompt" class="hidden">Press [E] to Search Drawer</div>
+
+            <!-- Mobile Joysticks & Buttons (hidden on PC) -->
+            <div id="joystick-left" class="joystick-container">
+                <div class="joystick-knob"></div>
+            </div>
+            <div id="joystick-right" class="joystick-container">
+                <div class="joystick-knob"></div>
+            </div>
+
+            <div class="mobile-btn-container" id="mob-btns">
+                <button class="mob-action-btn" id="mob-interact">E</button>
+                <button class="mob-action-btn" id="mob-use" style="background:rgba(0,100,0,0.7); border-color:#0f0;">Use</button>
+                <button class="mob-action-btn" id="mob-drop" style="background:rgba(100,50,0,0.7); border-color:#f80;">Drop</button>
+                <button class="mob-action-btn" id="mob-sprint" style="background:rgba(0,50,100,0.7); border-color:#0af;">Sprint</button>
+            </div>
+
+            <div class="hud-bottom">
+                <div id="cast-bar-container" class="bar-container hidden" style="width:300px; margin-bottom:10px; background:#000; border:1px solid var(--primary);">
+                    <div id="cast-bar" class="bar" style="width:0%; background:#0f0;"></div>
+                    <div class="bar-text" id="cast-text" style="color:#fff;">USING BANDAGE...</div>
+                </div>
+                
+                <div class="inventory-bar">
+                    <!-- 6 hotbar slots -->
+                    <div class="inv-slot active" data-slot="0"><span class="inv-qty"></span><span class="inv-name">Empty</span><span style="font-size:0.5rem; color:#555;">[1]</span></div>
+                    <div class="inv-slot" data-slot="1"><span class="inv-qty"></span><span class="inv-name">Empty</span><span style="font-size:0.5rem; color:#555;">[2]</span></div>
+                    <div class="inv-slot" data-slot="2"><span class="inv-qty"></span><span class="inv-name">Empty</span><span style="font-size:0.5rem; color:#555;">[3]</span></div>
+                    <div class="inv-slot" data-slot="3"><span class="inv-qty"></span><span class="inv-name">Empty</span><span style="font-size:0.5rem; color:#555;">[4]</span></div>
+                    <div class="inv-slot" data-slot="4"><span class="inv-qty"></span><span class="inv-name">Empty</span><span style="font-size:0.5rem; color:#555;">[5]</span></div>
+                    <div class="inv-slot" data-slot="5"><span class="inv-qty"></span><span class="inv-name">Empty</span><span style="font-size:0.5rem; color:#555;">[6]</span></div>
+                </div>
+            </div>
         </div>
-        <button style="width: 100%;" onclick="ui.hidePanel('ownershipExemptionPanel')">BACK</button>
+
+        <div id="flash-overlay"></div>
+
+        <!-- Jumpscare Display Overlay -->
+        <div id="jumpscare-overlay" class="hidden">
+            <h1 style="color:var(--primary); font-size:3.5rem; font-weight:bold; text-shadow:0 0 20px #ff0000; animation:text-shake 0.1s infinite;" id="jumpscare-title">HE SEES YOU</h1>
+        </div>
+
+        <!-- Spectator interface overlay -->
+        <div id="spectator-overlay" class="hidden">
+            <h1 style="color:var(--primary); font-size:3rem; text-shadow:0 0 10px #ff0000; animation: flicker 2s infinite alternate;">the Ayuwoki gotcha.</h1>
+            <div style="color:#fff; background:rgba(0,0,0,0.8); padding:10px 20px; border:1px dashed var(--primary); pointer-events:auto;">
+                SPECTATING CURRENT COMPANIONS
+            </div>
+            <button class="btn" style="pointer-events:auto;" id="respawn-btn">RESPAWN</button>
+        </div>
     </div>
 
-    <!-- SPECTATOR & DEATH SCREEN -->
-    <div id="spectateUI" class="hidden">
-        <div class="death-title" id="deathTitle">the Ayuwoki gotcha.</div>
-        <button id="respawnBtn" style="width: 200px;" onclick="game.requestRespawn()">RESPAWN</button>
-    </div>
-
-    <!-- HUD OVERLAY (In Game) -->
-    <div id="hud" class="hidden">
-        <div class="hud-bar">
-            <div id="hpFill" class="hud-fill"></div>
-            <div class="hud-text">VITALS: <span id="hpText">100</span>%</div>
-        </div>
-        <div class="hud-bar">
-            <div id="staminaFill" class="hud-fill"></div>
-            <div class="hud-text">STAMINA: <span id="staminaText">100</span>%</div>
-        </div>
-    </div>
-
-    <!-- HOTBAR HUD -->
-    <div id="hotbar" class="hidden">
-        <div class="hotbar-slot active" onclick="game.setActiveSlot(0)">
-            <span class="slot-num">1</span><span class="slot-icon" id="icon0"></span><span class="slot-stack" id="stack0"></span>
-        </div>
-        <div class="hotbar-slot" onclick="game.setActiveSlot(1)">
-            <span class="slot-num">2</span><span class="slot-icon" id="icon1"></span><span class="slot-stack" id="stack1"></span>
-        </div>
-        <div class="hotbar-slot" onclick="game.setActiveSlot(2)">
-            <span class="slot-num">3</span><span class="slot-icon" id="icon2"></span><span class="slot-stack" id="stack2"></span>
-        </div>
-        <div class="hotbar-slot" onclick="game.setActiveSlot(3)">
-            <span class="slot-num">4</span><span class="slot-icon" id="icon3"></span><span class="slot-stack" id="stack3"></span>
-        </div>
-        <div class="hotbar-slot" onclick="game.setActiveSlot(4)">
-            <span class="slot-num">5</span><span class="slot-icon" id="icon4"></span><span class="slot-stack" id="stack4"></span>
-        </div>
-        <div class="hotbar-slot" onclick="game.setActiveSlot(5)">
-            <span class="slot-num">6</span><span class="slot-icon" id="icon5"></span><span class="slot-stack" id="stack5"></span>
-        </div>
-    </div>
-
-    <!-- ON-SCREEN SYSTEM NOTIFICATIONS -->
-    <div id="notifications"></div>
-
-    <!-- ON-SCREEN PING & FPS -->
-    <div id="pingDisplay" class="hidden">FPS: <span id="fpsVal">--</span> | PING: <span id="pingVal">--</span>ms</div>
-
-    <!-- MOBILE TOUCH BUTTONS -->
-    <div id="mobileDrop" class="mobile-btn hidden" style="touch-action: none;">DROP</div>
-    <div id="mobileInteract" class="mobile-btn hidden" style="touch-action: none;">INTERACT</div>
-    <div id="mobileUse" class="mobile-btn hidden" style="touch-action: none;">USE</div>
-
-    <!-- MAIN GAME CANVAS -->
-    <canvas id="gameCanvas"></canvas>
-
-    <!-- CORE SCRIPTS -->
     <script>
-        // HORROR WEB AUDIO SYNTHESIZER
-        class HorrorSynth {
-            constructor() {
-                this.ctx = null;
-            }
-            init() {
-                if (this.ctx) return;
-                try {
-                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-                } catch(e) {
-                    console.error("Audio Context unavailable.", e);
-                }
-            }
-            playHeartbeat(proximityFactor) { // proximityFactor 0 to 1
-                if (!this.ctx || options.volume <= 0) return;
-                let volume = (options.volume / 100) * 0.4 * proximityFactor;
-                let pitch = 55 + (proximityFactor * 30);
-                let osc = this.ctx.createOscillator();
-                let gain = this.ctx.createGain();
-                osc.type = 'triangle';
-                osc.frequency.setValueAtTime(pitch, this.ctx.currentTime);
-                gain.gain.setValueAtTime(volume, this.ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.25);
-                osc.connect(gain);
-                gain.connect(this.ctx.destination);
-                osc.start();
-                osc.stop(this.ctx.currentTime + 0.25);
-            }
-            playFlash() {
-                if (!this.ctx || options.volume <= 0) return;
-                let osc = this.ctx.createOscillator();
-                let gain = this.ctx.createGain();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(1200, this.ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.15);
-                gain.gain.setValueAtTime((options.volume / 100) * 0.1, this.ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.15);
-                osc.connect(gain);
-                gain.connect(this.ctx.destination);
-                osc.start();
-                osc.stop(this.ctx.currentTime + 0.15);
-            }
-            playStun() {
-                if (!this.ctx || options.volume <= 0) return;
-                let osc = this.ctx.createOscillator();
-                let gain = this.ctx.createGain();
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(200, this.ctx.currentTime);
-                osc.frequency.linearRampToValueAtTime(800, this.ctx.currentTime + 0.5);
-                gain.gain.setValueAtTime((options.volume / 100) * 0.2, this.ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.5);
-                osc.connect(gain);
-                gain.connect(this.ctx.destination);
-                osc.start();
-                osc.stop(this.ctx.currentTime + 0.5);
-            }
-            playCrash() {
-                if (!this.ctx || options.volume <= 0) return;
-                let bufferSize = this.ctx.sampleRate * 0.8;
-                let buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-                let data = buffer.getChannelData(0);
-                for (let i = 0; i < bufferSize; i++) {
-                    data[i] = Math.random() * 2 - 1;
-                }
-                let noise = this.ctx.createBufferSource();
-                noise.buffer = buffer;
-                let filter = this.ctx.createBiquadFilter();
-                filter.type = 'lowpass';
-                filter.frequency.setValueAtTime(300, this.ctx.currentTime);
-                let gain = this.ctx.createGain();
-                gain.gain.setValueAtTime((options.volume / 100) * 0.6, this.ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.8);
-                noise.connect(filter);
-                filter.connect(gain);
-                gain.connect(this.ctx.destination);
-                noise.start();
-            }
-            playJumpscare() {
-                if (!this.ctx || options.volume <= 0) return;
-                let bufferSize = this.ctx.sampleRate * 2.0;
-                let buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-                let data = buffer.getChannelData(0);
-                for (let i = 0; i < bufferSize; i++) {
-                    data[i] = Math.random() * 2 - 1;
-                }
-                let noise = this.ctx.createBufferSource();
-                noise.buffer = buffer;
-                let filter = this.ctx.createBiquadFilter();
-                filter.type = 'peaking';
-                filter.frequency.setValueAtTime(200, this.ctx.currentTime);
-                filter.frequency.linearRampToValueAtTime(50, this.ctx.currentTime + 1.5);
-                let gain = this.ctx.createGain();
-                gain.gain.setValueAtTime((options.volume / 100) * 0.9, this.ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 1.8);
-                noise.connect(filter);
-                filter.connect(gain);
-                gain.connect(this.ctx.destination);
-                noise.start();
-            }
-        }
+        // ==========================================
+        // CONFIGURATION: Replace with Cloudflare URL
+        // ==========================================
+        const CLOUDFLARE_URL = ""; // e.g., "wss://your-tunnel-subdomain.trycloudflare.com"
 
-        const audio = new HorrorSynth();
-
-        // GLOBALS / CONFIG
+        // Global Game Options State
         const options = {
-            shake: false,
-            epilepsy: false,
-            fps: true,
+            screenshake: true,
+            epileptic: false,
+            hudstats: true,
             volume: 80,
-            displayName: "Guest_" + Math.floor(1000 + Math.random() * 9000)
+            displayName: "Guest_" + Math.random().toString(36).substring(2, 6)
         };
 
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
-        // SYSTEM NOTIFICATIONS CONTROL
-        function showNotification(title, text, duration = 7000) {
-            const container = document.getElementById("notifications");
-            const element = document.createElement("div");
-            element.className = "notification";
-            element.innerHTML = `<div class="notif-title">${title}</div><div class="notif-body">${text}</div>`;
-            container.appendChild(element);
-            setTimeout(() => {
-                element.style.animation = "fadeIn 0.3s ease reverse";
-                setTimeout(() => element.remove(), 290);
-            }, duration);
+        // Network Constants & Sync
+        let wsUrl = CLOUDFLARE_URL;
+        if (!wsUrl) {
+            wsUrl = (window.location.protocol === "https:" ? "wss://" : "ws://") + window.location.hostname + ":8005";
         }
 
-        // NETWORKING LAYER
         let socket = null;
+        let myClientId = null;
+        let myRoomId = null;
+        let networkRole = 'player'; // 'host' or 'player'
+        let currentOwnerId = null; // Client ID authorized to calculate Ayuwoki updates
+        
+        let ping = 0;
         let lastPingTime = 0;
-        let pingInterval = null;
+        let fps = 0;
+        let frameCount = 0;
+        let lastFpsUpdate = 0;
 
-        function connectSocket() {
-            let wsUrl = CLOUDFLARE_TUNNEL_URL;
-            if (!wsUrl) {
-                const protocol = window.location.protocol === "https:" ? "wss://" : "ws://";
-                wsUrl = protocol + (window.location.host || "localhost:8005");
-            } else {
-                if (wsUrl.startsWith("http")) {
-                    wsUrl = wsUrl.replace("https://", "wss://").replace("http://", "ws://");
+        // Map Size Constant
+        const MAP_SIZE = 4000;
+
+        // Local Entity Pools
+        let players = {};
+        let trees = [];
+        let walls = [];
+        let doors = [];
+        let lootSpots = [];
+        let itemsOnGround = [];
+        let particles = [];
+        
+        let cycle = 'day';
+        let cycleTimer = 60; // default day time counter
+        let localCycleTickTimer = 0;
+
+        // Local Player State
+        const localPlayer = {
+            x: 2000,
+            y: 2000,
+            angle: 0,
+            hp: 100,
+            stamina: 100,
+            isDead: false,
+            inventory: Array(6).fill(null),
+            activeSlot: 0,
+            speed: 3,
+            injured: false,
+            lastDamagedTime: 0,
+            lastSprintedTime: 0,
+            staminaRecoveryDelay: 5000, // 5s gain buffer
+            regenDelay: 8000, // 8s health regeneration block buffer
+            lastActionTime: Date.now()
+        };
+
+        // Ayuwoki Local State Representation
+        const ayuwoki = {
+            x: 1000,
+            y: 1000,
+            targetId: null,
+            rage: 0,
+            state: 'idle', // 'idle', 'chasing', 'breaking', 'stunned'
+            speed: 3,
+            angle: 0,
+            stunTimer: 0,
+            breakTimer: 0,
+            breakTargetId: null,
+            stuckTimer: 0,
+            lastX: 1000,
+            lastY: 1000,
+            attackCooldown: 0
+        };
+
+        // UI Modals routing
+        const screens = ['loading-screen', 'main-menu', 'instructions-modal', 'options-modal', 'lobby-modal', 'create-server-modal', 'network-info-modal', 'game-container'];
+        
+        function openScreen(targetId) {
+            screens.forEach(s => {
+                const el = document.getElementById(s);
+                if (s === targetId) {
+                    el.classList.remove('hidden');
+                } else {
+                    el.classList.add('hidden');
+                }
+            });
+        }
+
+        // Initialize Options Page UI elements
+        document.getElementById('opt-displayname').value = options.displayName;
+
+        function toggleOption(opt) {
+            if (opt === 'screenshake') {
+                options.screenshake = !options.screenshake;
+                document.getElementById('opt-screenshake').textContent = options.screenshake ? "ON" : "OFF";
+            } else if (opt === 'epileptic') {
+                options.epileptic = !options.epileptic;
+                document.getElementById('opt-epileptic').textContent = options.epileptic ? "ON" : "OFF";
+            } else if (opt === 'hudstats') {
+                options.hudstats = !options.hudstats;
+                document.getElementById('opt-hudstats').textContent = options.hudstats ? "ON" : "OFF";
+            }
+        }
+
+        function applyOptions() {
+            const rawName = document.getElementById('opt-displayname').value.trim();
+            if (rawName.length >= 2 && rawName.length <= 20) {
+                const sanitized = rawName.replace(/[^a-zA-Z0-9 ]/g, "");
+                options.displayName = sanitized;
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({ type: 'set_name', name: sanitized }));
                 }
             }
+            options.volume = parseInt(document.getElementById('opt-volume').value) || 80;
+            openScreen('main-menu');
+        }
 
+        // Connect to local or Cloudflare websocket
+        function connectToServer() {
             socket = new WebSocket(wsUrl);
-
             socket.onopen = () => {
-                document.getElementById("loadingScreen").classList.add("hidden");
-                document.getElementById("mainMenu").classList.remove("hidden");
-                sendMsg("c_connect", { name: options.displayName });
-                
-                pingInterval = setInterval(() => {
-                    lastPingTime = Date.now();
-                    sendMsg("ping", {});
-                }, 2000);
+                openScreen('main-menu');
+                socket.send(JSON.stringify({ type: 'set_name', name: options.displayName }));
+                requestLobbyList();
             };
 
             socket.onmessage = (event) => {
-                const packet = JSON.parse(event.data);
-                netHandler(packet);
+                const msg = JSON.parse(event.data);
+                handleServerMessage(msg);
             };
 
             socket.onclose = () => {
-                document.getElementById("loadingScreen").classList.remove("hidden");
-                document.getElementById("loadingScreen").innerHTML = `<div class="flicker-title">LOST CONNECTION</div><p style="color:#666;">Retrying connection...</p>`;
-                clearInterval(pingInterval);
-                setTimeout(connectSocket, 3000);
+                openScreen('loading-screen');
+                setTimeout(connectToServer, 4000);
             };
         }
 
-        function sendMsg(type, payload) {
+        function requestLobbyList() {
             if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({ type, payload }));
+                socket.send(JSON.stringify({ type: 'list_rooms' }));
             }
         }
 
-        function netHandler(packet) {
-            const { type, data } = packet;
-            if (type === "pong") {
-                const ping = Date.now() - lastPingTime;
-                document.getElementById("pingVal").innerText = ping;
-            } else if (type === "s_lobby_sync") {
-                document.getElementById("onlineCount").innerText = data.totalOnline;
-                ui.renderServerList(data.rooms);
-            } else if (type === "s_room_join_success") {
-                game.enterRoom(data);
-            } else if (type === "s_sync_frame") {
-                game.syncFrame(data);
-            } else if (type === "s_notification") {
-                showNotification(data.title, data.body, data.duration);
-            } else if (type === "s_jumpscare") {
-                game.triggerJumpscare(data);
-            } else if (type === "s_sound") {
-                if (data.sound === "crash") audio.playCrash();
-                if (data.sound === "stun") audio.playStun();
-            } else if (type === "s_blinded") {
-                game.triggerBlind(data.duration);
-            }
-        }
+        setInterval(requestLobbyList, 6000);
 
-        // GUI CONTROLLER
-        const ui = {
-            showPanel(id) {
-                document.getElementById(id).classList.remove("hidden");
-                audio.init();
-            },
-            hidePanel(id) {
-                document.getElementById(id).classList.add("hidden");
-            },
-            openServerBrowser() {
-                this.showPanel("serverBrowserPanel");
-                sendMsg("c_get_rooms", {});
-            },
-            renderServerList(rooms) {
-                const container = document.getElementById("serverGridList");
-                container.innerHTML = "";
-                if (rooms.length === 0) {
-                    container.innerHTML = `<div style="text-align: center; color: #555; padding: 25px;">No active game instances found.</div>`;
-                    return;
-                }
-                rooms.forEach(srv => {
-                    const row = document.createElement("div");
-                    row.className = "server-item";
-                    row.onclick = () => {
-                        sendMsg("c_join_room", { roomId: srv.id, name: options.displayName });
-                    };
-                    row.innerHTML = `<span>[${srv.name}] - Owner: ${srv.owner}</span><span>${srv.players}/${srv.maxPlayers}</span>`;
-                    container.appendChild(row);
-                });
-            },
-            applyOptions() {
-                const nameInp = document.getElementById("optName").value.trim();
-                const cleanName = nameInp.replace(/[^a-zA-Z0-9 ]/g, "");
-                if (cleanName.length >= 2 && cleanName.length <= 20) {
-                    options.displayName = cleanName;
-                }
-                options.shake = document.getElementById("optShake").value === "true";
-                options.epilepsy = document.getElementById("optEpilepsy").value === "true";
-                options.fps = document.getElementById("optFps").value === "true";
-                options.volume = parseInt(document.getElementById("optVolume").value);
+        function handleServerMessage(msg) {
+            switch (msg.type) {
+                case 'global_active_count':
+                    document.getElementById('active-players-txt').textContent = "* active users: " + msg.count;
+                    break;
                 
-                document.getElementById("pingDisplay").className = options.fps ? "" : "hidden";
-                sendMsg("c_update_name", { name: options.displayName });
-                
-                this.hidePanel("optionsPanel");
-                audio.init();
-            },
-            createServer() {
-                const sName = document.getElementById("srvName").value.trim();
-                const cleanName = sName.replace(/[^a-zA-Z0-9 ]/g, "");
-                if (cleanName.length < 2 || cleanName.length > 20) {
-                    alert("Server name must be 2-20 chars and alphanumeric!");
-                    return;
-                }
-                const maxP = parseInt(document.getElementById("srvMax").value);
-                const own = document.getElementById("srvOwnership").value;
-
-                sendMsg("c_create_room", {
-                    name: cleanName,
-                    maxPlayers: maxP,
-                    ownership: own
-                });
-
-                this.hidePanel("createServerPanel");
-                this.hidePanel("serverBrowserPanel");
-            }
-        };
-
-        // RUST & VOLTAGE SLIDER CHANGE SYNCHRONIZATION
-        document.getElementById("optVolume").oninput = function() {
-            document.getElementById("volumeVal").innerText = this.value;
-        };
-
-        // IN-GAME ENGINE & RENDERING
-        const canvas = document.getElementById("gameCanvas");
-        const ctx = canvas.getContext("2d");
-
-        // Simple Mobile Touch Vectors
-        const touchState = {
-            leftTouchId: null,
-            leftStart: {x:0, y:0},
-            leftMove: {x:0, y:0},
-            rightTouchId: null,
-            rightStart: {x:0, y:0},
-            rightMove: {x:0, y:0},
-            isSprinting: false
-        };
-
-        const localInput = {
-            w: false, a: false, s: false, d: false,
-            shift: false,
-            angle: 0,
-            activeSlot: 0,
-            lastSentX: 0,
-            lastSentY: 0,
-            lastSentAngle: 0,
-            useProgress: 0,
-            useTargetDuration: 0,
-            useItemName: ""
-        };
-
-        const game = {
-            inRoom: false,
-            roomId: "",
-            map: null,
-            players: {},
-            ayuwoki: null,
-            localPlayerId: "",
-            doors: {},
-            drawers: {},
-            pickups: [],
-            cycle: "day",
-            timeLeft: 0,
-            localPlayer: {
-                x: 30*120, y: 30*120,
-                hp: 100, stamina: 100,
-                inventory: [],
-                injured: false,
-                lastDamagedTime: 0,
-                lastStaminaUsedTime: 0
-            },
-            cameraFlashActive: 0,
-            cameraFlashCooldown: 0,
-            blindDuration: 0,
-            lastFrameTime: Date.now(),
-            fps: 0,
-            frameCount: 0,
-            fpsTimer: 0,
-            cameraShakeAmount: 0,
-            jumpscareActive: false,
-            jumpscareTime: 0,
-            particles: [],
-
-            enterRoom(data) {
-                this.inRoom = true;
-                this.roomId = data.roomId;
-                this.map = data.map;
-                this.localPlayerId = data.playerId;
-                this.localPlayer.x = data.spawnX;
-                this.localPlayer.y = data.spawnY;
-                
-                document.getElementById("mainMenu").classList.add("hidden");
-                document.getElementById("hud").classList.remove("hidden");
-                document.getElementById("hotbar").classList.remove("hidden");
-                document.getElementById("pingDisplay").className = options.fps ? "" : "hidden";
-
-                if (isMobile) {
-                    document.getElementById("mobileDrop").classList.remove("hidden");
-                    document.getElementById("mobileInteract").classList.remove("hidden");
-                    document.getElementById("mobileUse").classList.remove("hidden");
-                }
-
-                // Initialize empty inventory UI
-                this.updateInventoryUI();
-                audio.init();
-            },
-
-            syncFrame(data) {
-                this.players = data.players;
-                this.ayuwoki = data.ayuwoki;
-                this.cycle = data.cycle;
-                this.timeLeft = data.timeLeft;
-                this.doors = data.doors;
-                this.drawers = data.drawers;
-                this.pickups = data.pickups;
-
-                // Sync local player metadata from authority server
-                const syncMe = this.players[this.localPlayerId];
-                if (syncMe) {
-                    // Soft sync to avoid local snapping
-                    this.localPlayer.hp = syncMe.hp;
-                    this.localPlayer.stamina = syncMe.stamina;
-                    this.localPlayer.inventory = syncMe.inventory;
-                    this.localPlayer.injured = syncMe.injured;
-                    this.updateInventoryUI();
-                }
-            },
-
-            setActiveSlot(idx) {
-                localInput.activeSlot = idx;
-                const slots = document.getElementsByClassName("hotbar-slot");
-                for (let i = 0; i < slots.length; i++) {
-                    slots[i].classList.remove("active");
-                }
-                slots[idx].classList.add("active");
-            },
-
-            updateInventoryUI() {
-                const items = this.localPlayer.inventory || [];
-                for (let i = 0; i < 6; i++) {
-                    const iconEl = document.getElementById("icon" + i);
-                    const stackEl = document.getElementById("stack" + i);
-                    const item = items[i];
-                    if (item) {
-                        iconEl.innerText = this.getItemEmoji(item.type);
-                        stackEl.innerText = item.count > 1 ? item.count : "";
-                    } else {
-                        iconEl.innerText = "";
-                        stackEl.innerText = "";
-                    }
-                }
-            },
-
-            getItemEmoji(type) {
-                switch(type) {
-                    case "bandage": return "🩹";
-                    case "camera": return "📷";
-                    case "energy": return "⚡";
-                    case "snickers": return "🍫";
-                    case "bat": return "🏏";
-                    case "medicine": return "🧪";
-                    default: return "📦";
-                }
-            },
-
-            requestRespawn() {
-                sendMsg("c_respawn", {});
-                document.getElementById("spectateUI").classList.add("hidden");
-                this.jumpscareActive = false;
-            },
-
-            triggerJumpscare(victim) {
-                this.jumpscareActive = true;
-                this.jumpscareTime = Date.now();
-                audio.playJumpscare();
-                if (victim === this.localPlayerId) {
-                    // Apply camera rip
-                    setTimeout(() => {
-                        document.getElementById("spectateUI").classList.remove("hidden");
-                    }, 2000);
-                }
-            },
-
-            triggerBlind(duration) {
-                this.blindDuration = duration;
-            },
-
-            dropItem() {
-                sendMsg("c_drop_item", { slot: localInput.activeSlot, angle: localInput.angle });
-            },
-
-            interact() {
-                sendMsg("c_interact", {});
-            },
-
-            useActiveItem() {
-                const items = this.localPlayer.inventory || [];
-                const item = items[localInput.activeSlot];
-                if (!item) return;
-
-                if (item.type === "camera") {
-                    if (this.cameraFlashCooldown > 0) return;
-                    this.cameraFlashActive = 10;
-                    this.cameraFlashCooldown = 20 * 60; // 20s at 60fps
-                    audio.playFlash();
-                    sendMsg("c_use_item", { slot: localInput.activeSlot, angle: localInput.angle });
-                    return;
-                }
-
-                if (localInput.useProgress > 0) return; // already using
-
-                let duration = 0;
-                if (item.type === "bandage") duration = 8;
-                if (item.type === "energy") duration = 4;
-                if (item.type === "snickers") duration = 1;
-                if (item.type === "medicine") duration = 1;
-                if (item.type === "bat") {
-                    sendMsg("c_use_item", { slot: localInput.activeSlot, angle: localInput.angle });
-                    return;
-                }
-
-                if (duration > 0) {
-                    localInput.useProgress = duration * 60;
-                    localInput.useTargetDuration = duration * 60;
-                    localInput.useItemName = item.type;
-                }
-            },
-
-            // CLIENT SIDE PATHFIND COLLISION ASSIST
-            handleCollisions(dx, dy) {
-                if (!this.map) return {x: this.localPlayer.x, y: this.localPlayer.y};
-                let nx = this.localPlayer.x + dx;
-                let ny = this.localPlayer.y + dy;
-                const r = 20;
-
-                // Simple box resolve bounding nearby solid blocks
-                let startGridX = Math.floor((nx - r) / 120);
-                let endGridX = Math.floor((nx + r) / 120);
-                let startGridY = Math.floor((ny - r) / 120);
-                let endGridY = Math.floor((ny + r) / 120);
-
-                for (let gy = startGridY; gy <= endGridY; gy++) {
-                    for (let gx = startGridX; gx <= endGridX; gx++) {
-                        if (gx < 0 || gy < 0 || gx >= this.map.width || gy >= this.map.height) continue;
-                        const tile = this.map.data[gy][gx];
-                        
-                        // Solid Walls or Trees or Closed Doors
-                        let isSolid = (tile === 1 || tile === 2);
-                        if (tile === 5) { // Door
-                            const doorId = `${gx},${gy}`;
-                            const dSync = this.doors[doorId];
-                            if (dSync && !dSync.isOpen && !dSync.isBroken) {
-                                isSolid = true;
-                            }
-                        }
-
-                        if (isSolid) {
-                            let bx = gx * 120 + 60;
-                            let by = gy * 120 + 60;
-                            let closestX = Math.max(gx * 120, Math.min(nx, (gx + 1) * 120));
-                            let closestY = Math.max(gy * 120, Math.min(ny, (gy + 1) * 120));
-                            let distSqr = (nx - closestX)**2 + (ny - closestY)**2;
-
-                            if (distSqr < r * r) {
-                                let dist = Math.sqrt(distSqr);
-                                if (dist === 0) continue;
-                                let overlap = r - dist;
-                                let penX = ((nx - closestX) / dist) * overlap;
-                                let penY = ((ny - closestY) / dist) * overlap;
-                                nx += penX;
-                                ny += penY;
-                            }
-                        }
-                    }
-                }
-                return {x: nx, y: ny};
-            },
-
-            // MAIN RENDERING LOOP
-            updateAndRender() {
-                const now = Date.now();
-                const dt = (now - this.lastFrameTime) / 1000;
-                this.lastFrameTime = now;
-
-                // Count FPS
-                this.frameCount++;
-                this.fpsTimer += dt;
-                if (this.fpsTimer >= 1.0) {
-                    this.fps = this.frameCount;
-                    this.frameCount = 0;
-                    this.fpsTimer = 0;
-                    document.getElementById("fpsVal").innerText = this.fps;
-                }
-
-                // Check canvas dimensions
-                if (canvas.width !== window.innerWidth || canvas.height !== window.innerHeight) {
-                    canvas.width = window.innerWidth;
-                    canvas.height = window.innerHeight;
-                }
-
-                if (!this.inRoom) {
-                    requestAnimationFrame(() => this.updateAndRender());
-                    return;
-                }
-
-                // Tick timers
-                if (this.cameraFlashCooldown > 0) this.cameraFlashCooldown--;
-                if (this.blindDuration > 0) this.blindDuration -= dt;
-
-                // Handle local movement
-                let speed = 2.5;
-                let isSprinting = false;
-
-                if (this.localPlayer.hp > 0 && !this.jumpscareActive) {
-                    if (isMobile) {
-                        if (touchState.leftTouchId !== null) {
-                            const dx = touchState.leftMove.x - touchState.leftStart.x;
-                            const dy = touchState.leftMove.y - touchState.leftStart.y;
-                            const dist = Math.sqrt(dx*dx + dy*dy);
-                            if (dist > 10) {
-                                isSprinting = touchState.isSprinting && this.localPlayer.stamina > 5;
-                                let curSpeed = isSprinting ? 5.0 : 2.5;
-                                let rad = Math.atan2(dy, dx);
-                                let velocity = this.handleCollisions(Math.cos(rad) * curSpeed, Math.sin(rad) * curSpeed);
-                                this.localPlayer.x = velocity.x;
-                                this.localPlayer.y = velocity.y;
-                            }
-                        }
-                    } else {
-                        isSprinting = localInput.shift && this.localPlayer.stamina > 0;
-                        let curSpeed = isSprinting ? 5.0 : 2.5;
-                        let mx = 0, my = 0;
-                        if (localInput.w) my = -1;
-                        if (localInput.s) my = 1;
-                        if (localInput.a) mx = -1;
-                        if (localInput.d) mx = 1;
-
-                        if (mx !== 0 || my !== 0) {
-                            let rad = Math.atan2(my, mx);
-                            let velocity = this.handleCollisions(Math.cos(rad) * curSpeed, Math.sin(rad) * curSpeed);
-                            this.localPlayer.x = velocity.x;
-                            this.localPlayer.y = velocity.y;
-                        }
-                    }
-                }
-
-                // Increment consumable usage action
-                if (localInput.useProgress > 0) {
-                    localInput.useProgress--;
-                    if (localInput.useProgress <= 0) {
-                        sendMsg("c_use_item", { slot: localInput.activeSlot, angle: localInput.angle });
-                    }
-                }
-
-                // Rate limit coordinates updates to exactly 20Hz (every 50ms)
-                if (now - this.lastUpdateTime >= 50) {
-                    sendMsg("c_player_update", {
-                        x: this.localPlayer.x,
-                        y: this.localPlayer.y,
-                        angle: localInput.angle,
-                        activeSlot: localInput.activeSlot,
-                        isSprinting: isSprinting
-                    });
-                    this.lastUpdateTime = now;
-                }
-
-                // Update Local UI elements
-                document.getElementById("hpFill").style.width = Math.max(0, this.localPlayer.hp) + "%";
-                document.getElementById("hpText").innerText = Math.round(this.localPlayer.hp);
-                document.getElementById("staminaFill").style.width = Math.max(0, this.localPlayer.stamina) + "%";
-                document.getElementById("staminaText").innerText = Math.round(this.localPlayer.stamina);
-
-                // Compute Camera Screen-shake depending on Ayuwoki horror proximity
-                let proximity = 0;
-                if (this.ayuwoki && this.cycle === "night" && this.localPlayer.hp > 0) {
-                    let dx = this.ayuwoki.x - this.localPlayer.x;
-                    let dy = this.ayuwoki.y - this.localPlayer.y;
-                    let dist = Math.sqrt(dx*dx + dy*dy);
-                    let terrorRadius = 600; // default radius
-                    if (this.ayuwoki.rageStage === 3) terrorRadius = 480;
-                    if (this.ayuwoki.rageStage === 4) terrorRadius = 330;
-                    if (this.ayuwoki.rageStage === 5) terrorRadius = 0;
-
-                    if (dist < terrorRadius && terrorRadius > 0) {
-                        proximity = 1.0 - (dist / terrorRadius);
-                        this.cameraShakeAmount = proximity * 6;
-                        if (Math.random() < 0.05) {
-                            audio.playHeartbeat(proximity);
-                        }
-                    } else {
-                        this.cameraShakeAmount = 0;
-                    }
-                }
-
-                // Viewport Camera Coordinates follow Local Player
-                ctx.save();
-                let shakeX = (Math.random() - 0.5) * this.cameraShakeAmount * (options.shake ? 0.2 : 1.0);
-                let shakeY = (Math.random() - 0.5) * this.cameraShakeAmount * (options.shake ? 0.2 : 1.0);
-                
-                // Jitter effect if low hp
-                if (this.localPlayer.hp < 50 && this.localPlayer.hp > 0) {
-                    let crit = (50 - this.localPlayer.hp) / 50;
-                    shakeX += (Math.random() - 0.5) * crit * 3;
-                    shakeY += (Math.random() - 0.5) * crit * 3;
-                }
-
-                ctx.translate(canvas.width / 2 + shakeX - this.localPlayer.x, canvas.height / 2 + shakeY - this.localPlayer.y);
-
-                // DRAW THE HORROR MAP
-                this.drawGround();
-                this.drawDoorAndStructures();
-                this.drawPickups();
-                this.drawPlayers();
-                
-                // Draw dynamic flashlight / dynamic visual shadow casting
-                ctx.restore();
-                this.drawVignetteAndRaycastShadows(proximity);
-                ctx.save();
-                ctx.translate(canvas.width / 2 + shakeX - this.localPlayer.x, canvas.height / 2 + shakeY - this.localPlayer.y);
-
-                // DRAW OVERLAY EFFECTS ON LAYER TOP
-                this.drawParticles(dt);
-                ctx.restore();
-
-                // Draw Camera Flash visual
-                if (this.cameraFlashActive > 0) {
-                    this.cameraFlashActive--;
-                    if (!options.epilepsy) {
-                        ctx.fillStyle = `rgba(255,255,255,${this.cameraFlashActive / 10})`;
-                        ctx.fillRect(0,0,canvas.width,canvas.height);
-                    }
-                }
-
-                // Draw Blindness frame
-                if (this.blindDuration > 0) {
-                    if (options.epilepsy) {
-                        ctx.fillStyle = "#000";
-                        ctx.fillRect(0,0,canvas.width,canvas.height);
-                        ctx.fillStyle = "#ff0000";
-                        ctx.font = "bold 2rem Courier New";
-                        ctx.textAlign = "center";
-                        ctx.fillText("BLINDED", canvas.width/2, canvas.height/2);
-                    } else {
-                        let op = Math.min(1.0, this.blindDuration);
-                        ctx.fillStyle = `rgba(255,255,255,${op})`;
-                        ctx.fillRect(0,0,canvas.width,canvas.height);
-                    }
-                }
-
-                // Render Progress Action UI
-                if (localInput.useProgress > 0) {
-                    this.drawUseProgressBar();
-                }
-
-                // Draw Mobile Joysticks on Screen HUD
-                if (isMobile) {
-                    this.drawMobileHUD();
-                }
-
-                // Draw Jumpscare Animation
-                if (this.jumpscareActive) {
-                    this.drawJumpscareOverlay();
-                }
-
-                // Render Day Timer
-                this.drawTimeHUD();
-
-                requestAnimationFrame(() => this.updateAndRender());
-            },
-
-            lastUpdateTime: 0,
-
-            drawGround() {
-                // Ground boundaries
-                ctx.fillStyle = "#0a0a0a";
-                ctx.fillRect(0, 0, this.map.width*120, this.map.height*120);
-
-                // Debris and Rust
-                if (this.map && this.map.rust) {
-                    ctx.fillStyle = "#1e110a";
-                    this.map.rust.forEach(r => {
-                        ctx.beginPath();
-                        ctx.arc(r.x, r.y, 4, 0, Math.PI*2);
-                        ctx.fill();
-                    });
-                }
-            },
-
-            drawDoorAndStructures() {
-                if (!this.map) return;
-                for (let y = 0; y < this.map.height; y++) {
-                    for (let x = 0; x < this.map.width; x++) {
-                        const tile = this.map.data[y][x];
-                        if (tile === 1) { // Wall
-                            ctx.fillStyle = "#1e1e1e";
-                            ctx.fillRect(x*120, y*120, 118, 118);
-                            ctx.strokeStyle = "#333";
-                            ctx.lineWidth = 2;
-                            ctx.strokeRect(x*120, y*120, 118, 118);
-                        } else if (tile === 2) { // Tree
-                            ctx.fillStyle = "#112611";
-                            ctx.beginPath();
-                            ctx.arc(x*120 + 60, y*120 + 60, 30, 0, Math.PI*2);
-                            ctx.fill();
-                            ctx.fillStyle = "#3a2107";
-                            ctx.beginPath();
-                            ctx.arc(x*120 + 60, y*120 + 60, 8, 0, Math.PI*2);
-                            ctx.fill();
-                        } else if (tile === 3 || tile === 4) { // Bookshelf or Drawer
-                            const isBookshelf = (tile === 3);
-                            ctx.fillStyle = isBookshelf ? "#5c3a21" : "#422e1b";
-                            ctx.fillRect(x*120 + 15, y*120 + 15, 90, 90);
-                            
-                            // Visual Drawer handles
-                            ctx.fillStyle = "#fff";
-                            ctx.fillRect(x*120 + 50, y*120 + 40, 20, 4);
-
-                            // Indicator if searched
-                            const doorId = `${x},${y}`;
-                            const isSearched = this.drawers[doorId];
-                            ctx.font = "10px Courier New";
-                            ctx.fillStyle = isSearched ? "#555" : "#00ff00";
-                            ctx.textAlign = "center";
-                            ctx.fillText(isSearched ? "[SEARCHED]" : "[E] SEARCH", x*120 + 60, y*120 + 80);
-                        } else if (tile === 5) { // Doors
-                            const doorId = `${x},${y}`;
-                            const syncDoor = this.doors[doorId];
-                            if (syncDoor) {
-                                if (syncDoor.isBroken) {
-                                    // Broken door visual rubble
-                                    ctx.strokeStyle = "rgba(255,0,0,0.5)";
-                                    ctx.lineWidth = 3;
-                                    ctx.beginPath();
-                                    ctx.moveTo(x*120 + 10, y*120 + 60);
-                                    ctx.lineTo(x*120 + 110, y*120 + 60);
-                                    ctx.stroke();
-                                } else if (syncDoor.isOpen) {
-                                    // Open Door
-                                    ctx.strokeStyle = "#00ff00";
-                                    ctx.lineWidth = 4;
-                                    ctx.beginPath();
-                                    ctx.moveTo(x*120 + 10, y*120 + 10);
-                                    ctx.lineTo(x*120 + 10, y*120 + 110);
-                                    ctx.stroke();
-                                } else {
-                                    // Closed Door
-                                    ctx.fillStyle = "#4a4a4a";
-                                    ctx.fillRect(x*120 + 10, y*120 + 45, 100, 30);
-                                    ctx.strokeStyle = "#999";
-                                    ctx.strokeRect(x*120 + 10, y*120 + 45, 100, 30);
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-
-            drawPickups() {
-                this.pickups.forEach(p => {
-                    ctx.fillStyle = "rgba(0, 255, 255, 0.4)";
-                    ctx.beginPath();
-                    ctx.arc(p.x, p.y, 16, 0, Math.PI*2);
-                    ctx.fill();
-
-                    ctx.font = "bold 10px Courier New";
-                    ctx.fillStyle = "#00ffff";
-                    ctx.textAlign = "center";
-                    ctx.fillText(p.item.type.toUpperCase(), p.x, p.y - 20);
-                });
-            },
-
-            drawPlayers() {
-                // Draw dynamic Ayuwoki model
-                if (this.ayuwoki && this.cycle === "night") {
-                    // Render lerp transition positions
-                    if (this.ayuwoki.targetX) {
-                        this.ayuwoki.x += (this.ayuwoki.targetX - this.ayuwoki.x) * 0.35;
-                        this.ayuwoki.y += (this.ayuwoki.targetY - this.ayuwoki.y) * 0.35;
-                    }
-
-                    // Shadow base circle
-                    ctx.fillStyle = "#000000";
-                    ctx.beginPath();
-                    ctx.arc(this.ayuwoki.x, this.ayuwoki.y, 24, 0, Math.PI*2);
-                    ctx.fill();
-
-                    // White creepy hair
-                    ctx.strokeStyle = "#ffffff";
-                    ctx.lineWidth = 2.5;
-                    for (let h = 0; h < 6; h++) {
-                        ctx.beginPath();
-                        ctx.arc(this.ayuwoki.x - 10 + (h*4), this.ayuwoki.y - 12, 10, Math.PI, 0);
-                        ctx.stroke();
-                    }
-
-                    // White glowing eyes
-                    ctx.fillStyle = "#ffffff";
-                    ctx.beginPath();
-                    ctx.arc(this.ayuwoki.x - 8, this.ayuwoki.y, 3, 0, Math.PI*2);
-                    ctx.arc(this.ayuwoki.x + 8, this.ayuwoki.y, 3, 0, Math.PI*2);
-                    ctx.fill();
-
-                    // Horror aura
-                    ctx.strokeStyle = `rgba(255,0,0,${0.3 + Math.sin(Date.now()*0.01)*0.15})`;
-                    ctx.lineWidth = 3;
-                    ctx.beginPath();
-                    ctx.arc(this.ayuwoki.x, this.ayuwoki.y, 30, 0, Math.PI*2);
-                    ctx.stroke();
-
-                    // Breaking status indicator
-                    if (this.ayuwoki.state === "breaking") {
-                        ctx.font = "bold 11px Courier New";
-                        ctx.fillStyle = "#ff0000";
-                        ctx.textAlign = "center";
-                        ctx.fillText("BREAKING DOOR", this.ayuwoki.x, this.ayuwoki.y - 32);
-                    }
-                }
-
-                // Draw connected Players
-                Object.keys(this.players).forEach(id => {
-                    const p = this.players[id];
+                case 'rooms_list':
+                    renderLobbyList(msg.rooms);
+                    break;
+
+                case 'join_success':
+                    myRoomId = msg.roomId;
+                    networkRole = msg.role;
+                    players = msg.players;
+                    itemsOnGround = msg.items || [];
+                    cycle = msg.cycle || 'day';
+                    cycleTimer = msg.cycleTimer || 60;
                     
-                    if (id !== this.localPlayerId) {
-                        // Lerp interpolations
-                        p.x += (p.targetX - p.x) * 0.3;
-                        p.y += (p.targetY - p.y) * 0.3;
-                    } else {
-                        // Tie local player coordinate references to internal physics handler
-                        p.x = this.localPlayer.x;
-                        p.y = this.localPlayer.y;
-                    }
-
-                    if (p.hp <= 0) return; // Hide deceased circles
-
-                    // Survivor Base (Blue Circle)
-                    ctx.fillStyle = "#0066cc";
-                    ctx.beginPath();
-                    ctx.arc(p.x, p.y, 20, 0, Math.PI*2);
-                    ctx.fill();
-
-                    // Draw flashlight beam indicators
-                    ctx.strokeStyle = "#ffffff";
-                    ctx.lineWidth = 4;
-                    ctx.beginPath();
-                    ctx.moveTo(p.x, p.y);
-                    ctx.lineTo(p.x + Math.cos(p.angle)*30, p.y + Math.sin(p.angle)*30);
-                    ctx.stroke();
-
-                    // HP Overlay bars above player
-                    ctx.fillStyle = "rgba(0,0,0,0.6)";
-                    ctx.fillRect(p.x - 20, p.y - 30, 40, 5);
-                    ctx.fillStyle = "#00ff00";
-                    ctx.fillRect(p.x - 20, p.y - 30, (p.hp / 100) * 40, 5);
-
-                    // Display tag name
-                    ctx.font = "11px Courier New";
-                    ctx.fillStyle = "#ffffff";
-                    ctx.textAlign = "center";
-                    ctx.fillText(p.name, p.x, p.y - 36);
-                });
-            },
-
-            // 2D SEGMENT RAYCAST SHADOW TECHNIQUE
-            drawVignetteAndRaycastShadows(proximity) {
-                // Setup ambient overlay matching cycle timers
-                const overlayCanvas = document.createElement("canvas");
-                overlayCanvas.width = canvas.width;
-                overlayCanvas.height = canvas.height;
-                const oCtx = overlayCanvas.getContext("2d");
-
-                let ambientOpacity = 0.15; // default Day prep
-                if (this.cycle === "night") {
-                    ambientOpacity = 0.55; // Base night
-                    if (this.ayuwoki) {
-                        if (this.ayuwoki.rageStage === 3) ambientOpacity = 0.65;
-                        if (this.ayuwoki.rageStage === 4) ambientOpacity = 0.85;
-                        if (this.ayuwoki.rageStage === 5) ambientOpacity = 0.98;
-                    }
-                }
-
-                oCtx.fillStyle = `rgba(0, 0, 0, ${ambientOpacity})`;
-                oCtx.fillRect(0, 0, canvas.width, canvas.height);
-
-                if (this.localPlayer.hp > 0 && !this.jumpscareActive) {
-                    // Extract nearby walls to cast boundary segments
-                    const segments = [];
-                    const px = this.localPlayer.x;
-                    const py = this.localPlayer.y;
-
-                    // Collect segments around 400px of player
-                    if (this.map) {
-                        let radiusCells = 5;
-                        let cx = Math.floor(px / 120);
-                        let cy = Math.floor(py / 120);
-
-                        for (let gy = cy - radiusCells; gy <= cy + radiusCells; gy++) {
-                            for (let gx = cx - radiusCells; gx <= cx + radiusCells; gx++) {
-                                if (gx < 0 || gy < 0 || gx >= this.map.width || gy >= this.map.height) continue;
-                                const tile = this.map.data[gy][gx];
-                                let isSolid = (tile === 1 || tile === 2);
-                                if (tile === 5) {
-                                    const dSync = this.doors[`${gx},${gy}`];
-                                    if (dSync && !dSync.isOpen && !dSync.isBroken) isSolid = true;
-                                }
-
-                                if (isSolid) {
-                                    let x1 = gx * 120;
-                                    let y1 = gy * 120;
-                                    let x2 = x1 + 120;
-                                    let y2 = y1 + 120;
-                                    
-                                    // Segment borders
-                                    segments.push({a: {x:x1, y:y1}, b: {x:x2, y:y1}});
-                                    segments.push({a: {x:x2, y:y1}, b: {x:x2, y:y2}});
-                                    segments.push({a: {x:x2, y:y2}, b: {x:x1, y:y2}});
-                                    segments.push({a: {x:x1, y:y2}, b: {x:x1, y:y1}});
-                                }
-                            }
+                    // Sync initial dynamic room doors state
+                    if (msg.doors) {
+                        for (const dId in msg.doors) {
+                            const d = doors.find(door => door.id === dId);
+                            if (d) d.state = msg.doors[dId];
                         }
                     }
 
-                    // Cast lines over 90 degree flashlight FOV
-                    const numRays = 120;
-                    const fov = Math.PI * 0.5; // 90 degree flashlight cone
-                    const range = 400;
-                    const startAngle = localInput.angle - fov/2;
+                    initializeMap();
+                    openScreen('game-container');
+                    startGameLoop();
+                    break;
 
-                    const points = [];
-                    points.push({x: canvas.width/2, y: canvas.height/2});
+                case 'room_state':
+                    players = msg.players;
+                    networkRole = (msg.hostId === myClientId) ? 'host' : 'player';
+                    currentOwnerId = msg.ownerId;
+                    break;
 
-                    for (let r = 0; r <= numRays; r++) {
-                        let angle = startAngle + (fov * (r / numRays));
-                        let dx = Math.cos(angle);
-                        let dy = Math.sin(angle);
-                        let rayEnd = {x: px + dx*range, y: py + dy*range};
+                case 'ayuwoki_sync':
+                    if (currentOwnerId !== myClientId) {
+                        ayuwoki.x = msg.ayuwoki.x;
+                        ayuwoki.y = msg.ayuwoki.y;
+                        ayuwoki.rage = msg.ayuwoki.rage;
+                        ayuwoki.state = msg.ayuwoki.state;
+                        ayuwoki.targetId = msg.ayuwoki.targetId;
+                    }
+                    break;
 
-                        // Check closest segment intersections
-                        let minT = 1.0;
-                        segments.forEach(seg => {
-                            let inter = this.getIntersection(
-                                {x: px, y: py},
-                                {x: px + dx*range, y: py + dy*range},
-                                seg.a,
-                                seg.b
-                            );
-                            if (inter && inter.param < minT) {
-                                minT = inter.param;
-                                rayEnd = inter;
+                case 'door_sync':
+                    const door = doors.find(d => d.id === msg.doorId);
+                    if (door) door.state = msg.state;
+                    break;
+
+                case 'items_sync':
+                    itemsOnGround = msg.items;
+                    break;
+
+                case 'pickup_success':
+                    addItemToInventory(msg.item, msg.slot);
+                    break;
+
+                case 'cycle_sync':
+                    cycle = msg.cycle;
+                    cycleTimer = msg.cycleTimer;
+                    if (cycle === 'day') {
+                        // Restore all dynamic broken doors
+                        doors.forEach(d => {
+                            if (d.state === 'broken') d.state = 'closed';
+                        });
+                        // Reset map Searchable drawer nodes on day shift
+                        lootSpots.forEach(s => {
+                            if (Math.random() < 0.70) {
+                                s.searched = false;
+                                s.searchProgress = 0;
                             }
                         });
-
-                        // Convert back to Screen offsets relative to center
-                        points.push({
-                            x: canvas.width/2 + (rayEnd.x - px),
-                            y: canvas.height/2 + (rayEnd.y - py)
-                        });
                     }
+                    break;
 
-                    // Carve flashlight cone out of ambient overlay canvas
-                    oCtx.save();
-                    oCtx.globalCompositeOperation = "destination-out";
-                    oCtx.fillStyle = "rgba(0,0,0,1)";
-                    oCtx.beginPath();
-                    oCtx.moveTo(points[0].x, points[0].y);
-                    for (let p = 1; p < points.length; p++) {
-                        oCtx.lineTo(points[p].x, points[p].y);
+                case 'rage_notif':
+                    displayRageNotification(msg.tier, msg.title, msg.subtitle);
+                    break;
+
+                case 'jumpscare':
+                    if (msg.victimId === myClientId) {
+                        triggerLocalJumpscare();
                     }
-                    oCtx.closePath();
-                    oCtx.fill();
+                    break;
 
-                    // Carve tiny inner ambient circle around local player
-                    oCtx.beginPath();
-                    oCtx.arc(canvas.width/2, canvas.height/2, 35, 0, Math.PI*2);
-                    oCtx.fill();
-                    oCtx.restore();
+                case 'pong':
+                    ping = Date.now() - msg.timestamp;
+                    break;
+
+                case 'error':
+                    alert(msg.message);
+                    break;
+
+                case 'afk_kick':
+                    alert("Kicked for Inactivity.");
+                    location.reload();
+                    break;
+            }
+        }
+
+        // Lobby interface render
+        function renderLobbyList(roomsList) {
+            const listContainer = document.getElementById('lobby-container');
+            listContainer.innerHTML = '';
+            if (roomsList.length === 0) {
+                listContainer.innerHTML = '<div style="text-align:center; padding-top:100px; color:#555;">No active lobbies found...</div>';
+                return;
+            }
+            roomsList.forEach(r => {
+                const item = document.createElement('div');
+                item.className = 'lobby-item';
+                item.innerHTML = `
+                    <span><strong>${r.name}</strong> (${r.networkOwnership})</span>
+                    <span>${r.playersCount}/${r.maxPeople} Players</span>
+                `;
+                item.onclick = () => joinServer(r.id);
+                listContainer.appendChild(item);
+            });
+        }
+
+        function joinServer(roomId) {
+            socket.send(JSON.stringify({ type: 'join_room', roomId: roomId }));
+        }
+
+        function submitCreateServer() {
+            const sName = document.getElementById('srv-name').value.trim();
+            const sMax = parseInt(document.getElementById('srv-max').value) || 8;
+            const sNet = document.getElementById('srv-network').value;
+
+            if (sName.length < 2 || sName.length > 20) {
+                alert("Server name must follow display name constraints.");
+                return;
+            }
+
+            socket.send(JSON.stringify({
+                type: 'create_room',
+                roomName: sName,
+                maxPeople: sMax,
+                networkOwnership: sNet
+            }));
+        }
+
+        // ========================================================
+        // deterministic map generation
+        // ========================================================
+        class Wall {
+            constructor(x1, y1, x2, y2) {
+                this.x1 = x1; this.y1 = y1;
+                this.x2 = x2; this.y2 = y2;
+            }
+        }
+
+        function SeededRandom(seed) {
+            let s = seed;
+            return function() {
+                s = Math.sin(s) * 10000;
+                return s - Math.floor(s);
+            };
+        }
+
+        function initializeMap() {
+            trees = [];
+            walls = [];
+            doors = [];
+            lootSpots = [];
+            
+            // Map Bounds Border Walls
+            walls.push(new Wall(0, 0, MAP_SIZE, 0));
+            walls.push(new Wall(MAP_SIZE, 0, MAP_SIZE, MAP_SIZE));
+            walls.push(new Wall(MAP_SIZE, MAP_SIZE, 0, MAP_SIZE));
+            walls.push(new Wall(0, MAP_SIZE, 0, 0));
+
+            const prng = SeededRandom(19932);
+
+            // Construct 4 structured houses with multiple rooms
+            createHouse(400, 400, 350, 350, "h1");
+            createHouse(3200, 3200, 350, 350, "h2");
+            createHouse(3200, 400, 350, 350, "h3");
+            createHouse(400, 3200, 350, 350, "h4");
+
+            // Construct 2 complex abandoned corridor hallways
+            createHallway(1600, 600, 800, 240, "hl1");
+            createHallway(1600, 3100, 800, 240, "hl2");
+
+            // Distribute 180 scattered trees outside safe spawn/structure zones
+            for (let i = 0; i < 180; i++) {
+                const tx = prng() * 3800 + 100;
+                const ty = prng() * 3800 + 100;
+                const r = 25 + prng() * 15;
+
+                // Center safe spawn exclusion zone
+                if (tx > 1750 && tx < 2250 && ty > 1750 && ty < 2250) continue;
+
+                // Structure zone bounding checks
+                let insideHouse = false;
+                if (tx > 300 && tx < 850 && ty > 300 && ty < 850) insideHouse = true;
+                if (tx > 3100 && tx < 3650 && ty > 3100 && ty < 3650) insideHouse = true;
+                if (tx > 3100 && tx < 3650 && ty > 300 && ty < 850) insideHouse = true;
+                if (tx > 300 && tx < 850 && ty > 3100 && ty < 3650) insideHouse = true;
+                if (tx > 1500 && tx < 2500 && ty > 500 && ty < 950) insideHouse = true;
+                if (tx > 1500 && tx < 2500 && ty > 3000 && ty < 3450) insideHouse = true;
+
+                if (!insideHouse) {
+                    trees.push({ x: tx, y: ty, radius: r });
                 }
+            }
 
-                // Render compiled lighting overlay mask
-                ctx.drawImage(overlayCanvas, 0, 0);
+            // Generate particles
+            particles = [];
+            for (let i = 0; i < 70; i++) {
+                particles.push({
+                    x: Math.random() * MAP_SIZE,
+                    y: Math.random() * MAP_SIZE,
+                    vx: (Math.random() - 0.5) * 0.4,
+                    vy: (Math.random() - 0.5) * 0.4,
+                    size: 2 + Math.random() * 5,
+                    alpha: 0.1 + Math.random() * 0.25
+                });
+            }
 
-                // Render low health/critical screen damage overlays
-                if (this.localPlayer.hp < 50 && this.localPlayer.hp > 0) {
-                    let factor = (50 - this.localPlayer.hp) / 50; // up to 1.0
-                    ctx.strokeStyle = `rgba(200, 0, 0, ${factor * 0.45})`;
-                    ctx.lineWidth = 15;
-                    ctx.strokeRect(0, 0, canvas.width, canvas.height);
+            buildPathfindingGrid();
+            
+            // Safely locate spawn position outside obstacles
+            localPlayer.x = 2000 + (Math.random() - 0.5) * 100;
+            localPlayer.y = 2000 + (Math.random() - 0.5) * 100;
+            localPlayer.hp = 100;
+            localPlayer.stamina = 100;
+            localPlayer.isDead = false;
+        }
+
+        function createHouse(hx, hy, w, h, prefix) {
+            walls.push(new Wall(hx, hy, hx + w, hy));
+            walls.push(new Wall(hx + w, hy, hx + w, hy + h));
+            walls.push(new Wall(hx + w, hy + h, hx, hy + h));
+            walls.push(new Wall(hx, hy + h, hx, hy));
+
+            // Room split partitions
+            const mx = hx + w/2;
+            const my = hy + h/2;
+            walls.push(new Wall(mx, hy, mx, hy + h - 110)); 
+            walls.push(new Wall(hx, my, hx + w - 110, my));
+
+            // Dynamic Metal Doors
+            addDoor(hx + 100, hy + h, "h", prefix + "_out");
+            addDoor(mx, hy + 80, "v", prefix + "_in1");
+            addDoor(hx + 80, my, "h", prefix + "_in2");
+
+            // Storage Containers
+            addLootSpot(hx + 50, hy + 50, "bookshelf", prefix + "_b1");
+            addLootSpot(mx + 50, hy + 50, "drawer", prefix + "_d1");
+            addLootSpot(hx + 50, my + 50, "drawer", prefix + "_d2");
+            addLootSpot(mx + 50, my + 50, "bookshelf", prefix + "_b2");
+        }
+
+        function createHallway(hx, hy, w, h, prefix) {
+            walls.push(new Wall(hx, hy, hx + w, hy));
+            walls.push(new Wall(hx + w, hy, hx + w, hy + h));
+            walls.push(new Wall(hx + w, hy + h, hx, hy + h));
+            walls.push(new Wall(hx, hy + h, hx, hy));
+
+            const sWidth = w / 3;
+            walls.push(new Wall(hx + sWidth, hy, hx + sWidth, hy + h - 100));
+            walls.push(new Wall(hx + sWidth * 2, hy + 100, hx + sWidth * 2, hy + h));
+
+            addDoor(hx + sWidth, hy + h - 50, "v", prefix + "_d1");
+            addDoor(hx + sWidth * 2, hy + 50, "v", prefix + "_d2");
+            addDoor(hx + 60, hy + h, "h", prefix + "_out");
+
+            addLootSpot(hx + 50, hy + 50, "bookshelf", prefix + "_b1");
+            addLootSpot(hx + sWidth + 50, hy + 150, "drawer", prefix + "_d1");
+            addLootSpot(hx + sWidth * 2 + 50, hy + 50, "bookshelf", prefix + "_b2");
+        }
+
+        function addDoor(x, y, orient, id) {
+            doors.push({
+                id: id,
+                x: x, y: y,
+                orient: orient,
+                state: 'closed', // 'open', 'closed', 'broken'
+                width: 80,
+                height: 12,
+                cooldown: 0
+            });
+        }
+
+        function addLootSpot(x, y, type, id) {
+            lootSpots.push({
+                id: id,
+                x: x, y: y,
+                type: type,
+                searched: false,
+                searchProgress: 0
+            });
+        }
+
+        function getDoorWalls() {
+            const list = [];
+            doors.forEach(d => {
+                if (d.state === 'closed') {
+                    if (d.orient === 'h') {
+                        list.push(new Wall(d.x - d.width/2, d.y, d.x + d.width/2, d.y));
+                    } else {
+                        list.push(new Wall(d.x, d.y - d.width/2, d.x, d.y + d.width/2));
+                    }
                 }
-            },
+            });
+            return list;
+        }
 
-            getIntersection(p0, p1, p2, p3) {
-                let s1_x = p1.x - p0.x;
-                let s1_y = p1.y - p0.y;
-                let s2_x = p3.x - p2.x;
-                let s2_y = p3.y - p2.y;
+        // ========================================================
+        // A* grid setup for pathfinding optimization
+        // ========================================================
+        const GRID_SIZE = 80; // 80x80 grid mapping 4000x4000 (cell length 50)
+        const CELL_SIZE = 50;
+        const pfGrid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(0));
 
-                let s = (-s1_y * (p0.x - p2.x) + s1_x * (p0.y - p2.y)) / (-s2_x * s1_y + s1_x * s2_y);
-                let t = (s2_x * (p0.y - p2.y) - s2_y * (p0.x - p2.x)) / (-s2_x * s1_y + s1_x * s2_y);
+        function distanceToSegment(p, segment) {
+            const x1 = segment.x1, y1 = segment.y1, x2 = segment.x2, y2 = segment.y2;
+            const lengthSq = (x1 - x2)**2 + (y1 - y2)**2;
+            if (lengthSq === 0) return Math.hypot(p.x - x1, p.y - y1);
+            let t = ((p.x - x1) * (x2 - x1) + (p.y - y1) * (y2 - y1)) / lengthSq;
+            t = Math.max(0, Math.min(1, t));
+            return Math.hypot(p.x - (x1 + t * (x2 - x1)), p.y - (y1 + t * (y2 - y1)));
+        }
 
-                if (s >= 0 && s <= 1 && t >= 0 && t <= 1) {
-                    return {
-                        x: p0.x + (t * s1_x),
-                        y: p0.y + (t * s1_y),
-                        param: t
-                    };
-                }
-                return null;
-            },
+        function buildPathfindingGrid() {
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    const cx = x * CELL_SIZE + CELL_SIZE/2;
+                    const cy = y * CELL_SIZE + CELL_SIZE/2;
+                    let block = false;
 
-            drawParticles(dt) {
-                // Generate simple environment ambient dust
-                if (Math.random() < 0.1 && this.particles.length < 50) {
-                    this.particles.push({
-                        x: this.localPlayer.x + (Math.random() - 0.5) * 800,
-                        y: this.localPlayer.y + (Math.random() - 0.5) * 800,
-                        vx: (Math.random() - 0.5) * 10,
-                        vy: (Math.random() - 0.5) * 10,
-                        life: 3.0
-                    });
-                }
-
-                ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
-                for (let i = this.particles.length - 1; i >= 0; i--) {
-                    let p = this.particles[i];
-                    p.x += p.vx * dt;
-                    p.y += p.vy * dt;
-                    p.life -= dt;
-                    if (p.life <= 0) {
-                        this.particles.splice(i, 1);
+                    // Out of bounds safety margins
+                    if (cx < 40 || cx > MAP_SIZE - 40 || cy < 40 || cy > MAP_SIZE - 40) {
+                        pfGrid[y][x] = 1;
                         continue;
                     }
-                    ctx.beginPath();
-                    ctx.arc(p.x, p.y, 2, 0, Math.PI*2);
-                    ctx.fill();
-                }
-            },
 
-            drawUseProgressBar() {
-                const px = canvas.width / 2;
-                const py = canvas.height - 120;
-                const pct = 1.0 - (localInput.useProgress / localInput.useTargetDuration);
-                
-                ctx.fillStyle = "rgba(0,0,0,0.8)";
-                ctx.fillRect(px - 100, py, 200, 15);
-                ctx.fillStyle = "#ff0000";
-                ctx.fillRect(px - 100, py, pct * 200, 15);
-
-                ctx.font = "bold 11px Courier New";
-                ctx.fillStyle = "#fff";
-                ctx.textAlign = "center";
-                ctx.fillText(`USING: ${localInput.useItemName.toUpperCase()}`, px, py - 6);
-            },
-
-            drawMobileHUD() {
-                // Left Joystick drawing
-                if (touchState.leftTouchId !== null) {
-                    ctx.fillStyle = "rgba(255, 255, 255, 0.1)";
-                    ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
-                    ctx.lineWidth = 2;
-                    ctx.beginPath();
-                    ctx.arc(touchState.leftStart.x, touchState.leftStart.y, 50, 0, Math.PI*2);
-                    ctx.fill();
-                    ctx.stroke();
-
-                    // Knob position
-                    ctx.fillStyle = "rgba(255, 0, 0, 0.4)";
-                    ctx.beginPath();
-                    ctx.arc(touchState.leftMove.x, touchState.leftMove.y, 20, 0, Math.PI*2);
-                    ctx.fill();
-                }
-
-                // Right Joystick drawing
-                if (touchState.rightTouchId !== null) {
-                    ctx.fillStyle = "rgba(255, 255, 255, 0.1)";
-                    ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
-                    ctx.lineWidth = 2;
-                    ctx.beginPath();
-                    ctx.arc(touchState.rightStart.x, touchState.rightStart.y, 50, 0, Math.PI*2);
-                    ctx.fill();
-                    ctx.stroke();
-
-                    ctx.fillStyle = "rgba(255, 0, 0, 0.4)";
-                    ctx.beginPath();
-                    ctx.arc(touchState.rightMove.x, touchState.rightMove.y, 20, 0, Math.PI*2);
-                    ctx.fill();
-                }
-            },
-
-            drawJumpscareOverlay() {
-                let elapsed = Date.now() - this.jumpscareTime;
-                if (elapsed < 2000) {
-                    // Flash screen
-                    if (!options.epilepsy) {
-                        ctx.fillStyle = (Math.floor(elapsed / 50) % 2 === 0) ? "#ff0000" : "#000";
-                        ctx.fillRect(0,0,canvas.width,canvas.height);
-                    } else {
-                        ctx.fillStyle = "#000000";
-                        ctx.fillRect(0,0,canvas.width,canvas.height);
+                    // Trees Bounding checks
+                    for (const t of trees) {
+                        if (Math.hypot(cx - t.x, cy - t.y) < t.radius + 15) {
+                            block = true;
+                            break;
+                        }
                     }
 
-                    // Draw scary huge white hair/glowing eye sketch
-                    ctx.fillStyle = "#ffffff";
-                    ctx.font = "bold 5rem Courier New";
-                    ctx.textAlign = "center";
-                    ctx.fillText("AYUWOKI", canvas.width/2, canvas.height/2);
-                    
-                    ctx.fillStyle = "#ff0000";
-                    ctx.font = "1.5rem Courier New";
-                    ctx.fillText("S H E E S H", canvas.width/2, canvas.height/2 + 70);
-                } else {
-                    this.jumpscareActive = false;
-                }
-            },
+                    if (block) {
+                        pfGrid[y][x] = 1;
+                        continue;
+                    }
 
-            drawTimeHUD() {
-                ctx.fillStyle = "#ff0000";
-                ctx.font = "bold 14px Courier New";
-                ctx.textAlign = "center";
-                let m = Math.floor(this.timeLeft / 60);
-                let s = Math.floor(this.timeLeft % 60);
-                let displaySec = s < 10 ? "0" + s : s;
-                
-                let cycleText = this.cycle === "day" ? "DAY PREPARATION (SAFE)" : "NIGHT SHIFT (DANGER)";
-                ctx.fillText(`${cycleText} - ${m}:${displaySec}`, canvas.width / 2, 35);
+                    // Static Walls intersections
+                    for (const w of walls) {
+                        if (distanceToSegment({x: cx, y: cy}, w) < 25) {
+                            block = true;
+                            break;
+                        }
+                    }
+
+                    pfGrid[y][x] = block ? 1 : 0;
+                }
             }
+        }
+
+        // Standard dynamic open A* calculation
+        function calculatePath(startPos, endPos) {
+            const startX = Math.floor(startPos.x / CELL_SIZE);
+            const startY = Math.floor(startPos.y / CELL_SIZE);
+            const endX = Math.floor(endPos.x / CELL_SIZE);
+            const endY = Math.floor(endPos.y / CELL_SIZE);
+
+            if (startX < 0 || startX >= GRID_SIZE || startY < 0 || startY >= GRID_SIZE) return null;
+            if (endX < 0 || endX >= GRID_SIZE || endY < 0 || endY >= GRID_SIZE) return null;
+
+            const openSet = [];
+            const closedSet = new Set();
+
+            const key = (x, y) => `${x},${y}`;
+
+            const startNode = {
+                x: startX, y: startY,
+                g: 0,
+                h: Math.abs(startX - endX) + Math.abs(startY - endY),
+                f: 0,
+                parent: null
+            };
+            startNode.f = startNode.h;
+            openSet.push(startNode);
+
+            let iterations = 0;
+            while (openSet.length > 0 && iterations < 350) {
+                iterations++;
+                openSet.sort((a, b) => a.f - b.f);
+                const curr = openSet.shift();
+
+                if (curr.x === endX && curr.y === endY) {
+                    const path = [];
+                    let temp = curr;
+                    while (temp) {
+                        path.push({ x: temp.x * CELL_SIZE + CELL_SIZE/2, y: temp.y * CELL_SIZE + CELL_SIZE/2 });
+                        temp = temp.parent;
+                    }
+                    return path.reverse();
+                }
+
+                closedSet.add(key(curr.x, curr.y));
+
+                const neighbors = [
+                    {x: curr.x + 1, y: curr.y}, {x: curr.x - 1, y: curr.y},
+                    {x: curr.x, y: curr.y + 1}, {x: curr.x, y: curr.y - 1}
+                ];
+
+                for (const n of neighbors) {
+                    if (n.x < 0 || n.x >= GRID_SIZE || n.y < 0 || n.y >= GRID_SIZE) continue;
+                    if (pfGrid[n.y][n.x] === 1) continue;
+                    if (closedSet.has(key(n.x, n.y))) continue;
+
+                    const tentativeG = curr.g + 1;
+                    let existing = openSet.find(o => o.x === n.x && o.y === n.y);
+
+                    if (!existing) {
+                        const nextNode = {
+                            x: n.x, y: n.y,
+                            g: tentativeG,
+                            h: Math.abs(n.x - endX) + Math.abs(n.y - endY),
+                            f: 0,
+                            parent: curr
+                        };
+                        nextNode.f = nextNode.g + nextNode.h;
+                        openSet.push(nextNode);
+                    } else if (tentativeG < existing.g) {
+                        existing.g = tentativeG;
+                        existing.f = existing.g + existing.h;
+                        existing.parent = curr;
+                    }
+                }
+            }
+            return null; // Route unavailable
+        }
+
+        // ========================================================
+        // CANVAS HORROR RENDERING AND CONTROLS ENGINE
+        // ========================================================
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const maskCanvas = document.createElement('canvas');
+        const maskContext = maskCanvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            detectDeviceLayout();
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        let keys = {};
+        window.addEventListener('keydown', e => {
+            keys[e.key.toLowerCase()] = true;
+            localPlayer.lastActionTime = Date.now();
+            if (e.key >= '1' && e.key <= '6') {
+                selectInventorySlot(parseInt(e.key) - 1);
+            }
+            if (e.key.toLowerCase() === 'e') {
+                triggerInteractAction();
+            }
+            if (e.key.toLowerCase() === 'q') {
+                triggerDropAction();
+            }
+        });
+        window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+        let mouseX = 0, mouseY = 0;
+        window.addEventListener('mousemove', e => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            localPlayer.lastActionTime = Date.now();
+        });
+
+        // Touch Input variables
+        let isMobile = false;
+        const joysticks = {
+            left: { active: false, startX: 0, startY: 0, curX: 0, curY: 0, dx: 0, dy: 0 },
+            right: { active: false, startX: 0, startY: 0, curX: 0, curY: 0, dx: 0, dy: 0 }
         };
 
-        // EVENT LISTENERS PC (INPUTS)
-        window.addEventListener("keydown", (e) => {
-            if (!game.inRoom) return;
-            const k = e.key.toLowerCase();
-            if (k === 'w') localInput.w = true;
-            if (k === 's') localInput.s = true;
-            if (k === 'a') localInput.a = true;
-            if (k === 'd') localInput.d = true;
-            if (e.key === 'Shift') {
-                localInput.shift = true;
-                touchState.isSprinting = true;
-            }
-            if (k === 'q') game.dropItem();
-            if (k === 'e') game.interact();
+        function detectDeviceLayout() {
+            isMobile = ('touchstart' in window || navigator.maxTouchPoints > 0);
+            const mobBtns = document.getElementById('mob-btns');
+            const joyL = document.getElementById('joystick-left');
+            const joyR = document.getElementById('joystick-right');
 
-            // Slots selection
-            if (k >= '1' && k <= '6') {
-                game.setActiveSlot(parseInt(k) - 1);
+            if (isMobile) {
+                mobBtns.classList.remove('hidden');
+                joyL.style.display = 'block';
+                joyR.style.display = 'block';
+            } else {
+                mobBtns.classList.add('hidden');
+                joyL.style.display = 'none';
+                joyR.style.display = 'none';
             }
+        }
+
+        // Setup Virtual Touch joysticks listeners
+        function setupJoysticks() {
+            const jL = document.getElementById('joystick-left');
+            const jR = document.getElementById('joystick-right');
+
+            setupJoystickEvent(jL, joysticks.left);
+            setupJoystickEvent(jR, joysticks.right);
+
+            document.getElementById('mob-interact').onclick = () => { triggerInteractAction(); localPlayer.lastActionTime = Date.now(); };
+            document.getElementById('mob-use').onclick = () => { triggerUseItemAction(); localPlayer.lastActionTime = Date.now(); };
+            document.getElementById('mob-drop').onclick = () => { triggerDropAction(); localPlayer.lastActionTime = Date.now(); };
+        }
+
+        function setupJoystickEvent(element, joyData) {
+            const knob = element.querySelector('.joystick-knob');
+            
+            element.addEventListener('touchstart', e => {
+                const t = e.touches[0];
+                const rect = element.getBoundingClientRect();
+                joyData.startX = rect.left + rect.width/2;
+                joyData.startY = rect.top + rect.height/2;
+                joyData.active = true;
+                localPlayer.lastActionTime = Date.now();
+            });
+
+            element.addEventListener('touchmove', e => {
+                if (!joyData.active) return;
+                const t = [...e.touches].find(touch => {
+                    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+                    return el === element || element.contains(el);
+                });
+                if (!t) return;
+
+                let dx = t.clientX - joyData.startX;
+                let dy = t.clientY - joyData.startY;
+                const dist = Math.hypot(dx, dy);
+                const maxLen = 45;
+
+                if (dist > maxLen) {
+                    dx = (dx / dist) * maxLen;
+                    dy = (dy / dist) * maxLen;
+                }
+
+                joyData.dx = dx / maxLen;
+                joyData.dy = dy / maxLen;
+
+                knob.style.transform = `translate(${dx}px, ${dy}px)`;
+                localPlayer.lastActionTime = Date.now();
+            });
+
+            element.addEventListener('touchend', () => {
+                joyData.active = false;
+                joyData.dx = 0;
+                joyData.dy = 0;
+                knob.style.transform = `translate(0px, 0px)`;
+            });
+        }
+
+        // ========================================================
+        // CORE COLLISION MOVEMENT EVALUATION
+        // ========================================================
+        function checkMovementCollisions(px, py, radius) {
+            if (px < radius || px > MAP_SIZE - radius || py < radius || py > MAP_SIZE - radius) return true;
+
+            // Trees collisions
+            for (const t of trees) {
+                if (Math.hypot(px - t.x, py - t.y) < t.radius + radius - 3) {
+                    return true;
+                }
+            }
+
+            // Static Wall intersections
+            for (const w of walls) {
+                if (distanceToSegment({x: px, y: py}, w) < radius) {
+                    return true;
+                }
+            }
+
+            // Metal closed Doors checks
+            for (const d of doors) {
+                if (d.state === 'closed') {
+                    const doorWall = d.orient === 'h'
+                        ? new Wall(d.x - d.width/2, d.y, d.x + d.width/2, d.y)
+                        : new Wall(d.x, d.y - d.width/2, d.x, d.y + d.width/2);
+                    if (distanceToSegment({x: px, y: py}, doorWall) < radius) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        // Local Player input loop tick
+        let lastTime = 0;
+        let lastNetUpdate = 0;
+        let activeCast = null; // { type, start, duration }
+
+        function updateLocalPlayer(dt) {
+            if (localPlayer.isDead) return;
+
+            // 3 Minute AFK Auto Kick evaluation
+            if (Date.now() - localPlayer.lastActionTime > 180000) {
+                alert("AFK timeout.");
+                location.reload();
+            }
+
+            // Regenerative Health state
+            const now = Date.now();
+            if (!localPlayer.injured && localPlayer.hp < 100) {
+                if (now - localPlayer.lastDamagedTime > localPlayer.regenDelay) {
+                    localPlayer.hp = Math.min(100, localPlayer.hp + 5 * dt);
+                }
+            } else if (localPlayer.injured && localPlayer.hp < 50) {
+                if (now - localPlayer.lastDamagedTime > localPlayer.regenDelay) {
+                    localPlayer.hp = Math.min(50, localPlayer.hp + 5 * dt);
+                }
+            }
+
+            // Movement Inputs (Left Joystick override)
+            let mx = 0;
+            let my = 0;
+
+            if (isMobile) {
+                mx = joysticks.left.dx;
+                my = joysticks.left.dy;
+            } else {
+                if (keys['w'] || keys['arrowup']) my = -1;
+                if (keys['s'] || keys['arrowdown']) my = 1;
+                if (keys['a'] || keys['arrowleft']) mx = -1;
+                if (keys['d'] || keys['arrowright']) mx = 1;
+                // Normalize PC movement vectors
+                const len = Math.hypot(mx, my);
+                if (len > 0) { mx /= len; my /= len; }
+            }
+
+            // Sprint Stamina Logic
+            let activeSpeed = 3;
+            const isSprinting = isMobile ? document.getElementById('mob-sprint').classList.contains('active') : keys['shift'];
+
+            if (isSprinting && (mx !== 0 || my !== 0) && localPlayer.stamina > 0) {
+                activeSpeed = 5;
+                localPlayer.stamina = Math.max(0, localPlayer.stamina - 5 * dt);
+                localPlayer.lastSprintedTime = now;
+            } else {
+                if (now - localPlayer.lastSprintedTime > localPlayer.staminaRecoveryDelay) {
+                    localPlayer.stamina = Math.min(100, localPlayer.stamina + 8 * dt);
+                }
+            }
+
+            // Temporary Buff effects
+            if (localPlayer.speedBuffTimer > 0) {
+                localPlayer.speedBuffTimer -= dt;
+                activeSpeed *= 1.5;
+            }
+            if (localPlayer.hitBoostTimer > 0) {
+                localPlayer.hitBoostTimer -= dt;
+                activeSpeed *= 1.1;
+            }
+
+            const stepX = mx * activeSpeed;
+            const stepY = my * activeSpeed;
+
+            if (stepX !== 0 || stepY !== 0) {
+                if (!checkMovementCollisions(localPlayer.x + stepX, localPlayer.y, 18)) localPlayer.x += stepX;
+                if (!checkMovementCollisions(localPlayer.x, localPlayer.y + stepY, 18)) localPlayer.y += stepY;
+            }
+
+            // Rotation/Aim Target (Right Joystick override)
+            if (isMobile && joysticks.right.active) {
+                localPlayer.angle = Math.atan2(joysticks.right.dy, joysticks.right.dx);
+            } else if (!isMobile) {
+                const screenPos = worldToScreen(localPlayer.x, localPlayer.y);
+                localPlayer.angle = Math.atan2(mouseY - screenPos.y, mouseX - screenPos.x);
+            }
+
+            // Active consumable cast state
+            if (activeCast) {
+                const elapsed = now - activeCast.start;
+                const pct = Math.min(100, (elapsed / activeCast.duration) * 100);
+                document.getElementById('cast-bar-container').classList.remove('hidden');
+                document.getElementById('cast-bar').style.width = pct + "%";
+                document.getElementById('cast-text').textContent = `USING ${activeCast.type.toUpperCase()}...`;
+
+                if (elapsed >= activeCast.duration) {
+                    finishConsumableItemCast();
+                }
+            } else {
+                document.getElementById('cast-bar-container').classList.add('hidden');
+            }
+
+            // Flash overlays decay
+            if (cameraFlashTimer > 0) cameraFlashTimer -= dt;
+            if (blindTimer > 0) blindTimer -= dt;
+
+            // Update networking: max 20 updates/second restriction
+            if (now - lastNetUpdate > 50) {
+                socket.send(JSON.stringify({
+                    type: 'player_update',
+                    playerState: {
+                        x: localPlayer.x,
+                        y: localPlayer.y,
+                        angle: localPlayer.angle,
+                        hp: Math.ceil(localPlayer.hp),
+                        stamina: Math.ceil(localPlayer.stamina),
+                        isDead: localPlayer.isDead,
+                        inventory: localPlayer.inventory,
+                        activeSlot: localPlayer.activeSlot
+                    }
+                }));
+                lastNetUpdate = now;
+            }
+        }
+
+        // ========================================================
+        // THE AYUWOKI INTELLIGENCE ENGINE (AUTHORIZED TICK OWNER)
+        // ========================================================
+        function updateAyuwokiEntity(dt) {
+            if (cycle === 'day') {
+                ayuwoki.x = -9999;
+                ayuwoki.y = -9999;
+                ayuwoki.state = 'idle';
+                return;
+            }
+
+            // Retrieve authorized attributes based on rage metrics
+            const stats = getAyuwokiRageAttributes(ayuwoki.rage);
+            ayuwoki.speed = stats.speed;
+
+            // Stun and actions locking
+            if (ayuwoki.stunTimer > 0) {
+                ayuwoki.stunTimer -= dt * stats.stunRecovery;
+                ayuwoki.state = 'stunned';
+                syncAyuwokiState();
+                return;
+            }
+
+            if (ayuwoki.breakTimer > 0) {
+                ayuwoki.breakTimer -= dt;
+                ayuwoki.state = 'breaking';
+                syncAyuwokiState();
+
+                if (ayuwoki.breakTimer <= 0) {
+                    // Complete break action on dynamic door
+                    socket.send(JSON.stringify({ type: 'door_interact', doorId: ayuwoki.breakTargetId, state: 'broken' }));
+                    // Exertion exhaustion stun penalty
+                    ayuwoki.stunTimer = 0.7; 
+                    ayuwoki.state = 'stunned';
+                    syncAyuwokiState();
+                }
+                return;
+            }
+
+            // Locate target survivor (closest living client)
+            let nearestId = null;
+            let minDist = Infinity;
+            
+            // Loop through all joined room players
+            for (const pId in players) {
+                const p = players[pId];
+                if (p.isDead) continue;
+                const d = Math.hypot(p.x - ayuwoki.x, p.y - ayuwoki.y);
+                if (d < minDist) {
+                    minDist = d;
+                    nearestId = pId;
+                }
+            }
+
+            if (!nearestId) {
+                ayuwoki.state = 'idle';
+                syncAyuwokiState();
+                return;
+            }
+
+            ayuwoki.targetId = nearestId;
+            const target = players[nearestId];
+
+            // Evaluate door intersections within movement path
+            let closedDoorBlocking = null;
+            for (const d of doors) {
+                if (d.state === 'closed') {
+                    const distToDoor = Math.hypot(d.x - ayuwoki.x, d.y - ayuwoki.y);
+                    if (distToDoor < 65) {
+                        closedDoorBlocking = d;
+                        break;
+                    }
+                }
+            }
+
+            if (closedDoorBlocking) {
+                ayuwoki.state = 'breaking';
+                ayuwoki.breakTargetId = closedDoorBlocking.id;
+                ayuwoki.breakTimer = 2.5 / stats.doorBreakSpeed;
+                syncAyuwokiState();
+                return;
+            }
+
+            // Pathfinding processing
+            const path = calculatePath({x: ayuwoki.x, y: ayuwoki.y}, {x: target.x, y: target.y});
+            if (path && path.length > 1) {
+                const stepNode = path[1];
+                const angleToNode = Math.atan2(stepNode.y - ayuwoki.y, stepNode.x - ayuwoki.x);
+                ayuwoki.angle = angleToNode;
+
+                let spd = ayuwoki.speed;
+                if (ayuwoki.stuckBoostTimer > 0) {
+                    ayuwoki.stuckBoostTimer -= dt;
+                    spd *= 1.10;
+                }
+
+                ayuwoki.x += Math.cos(angleToNode) * spd;
+                ayuwoki.y += Math.sin(angleToNode) * spd;
+                ayuwoki.state = 'chasing';
+            } else {
+                // Line-of-sight tracking fallback
+                const angleDirect = Math.atan2(target.y - ayuwoki.y, target.x - ayuwoki.x);
+                ayuwoki.angle = angleDirect;
+                ayuwoki.x += Math.cos(angleDirect) * ayuwoki.speed;
+                ayuwoki.y += Math.sin(angleDirect) * ayuwoki.speed;
+            }
+
+            // Stuck Prevention checking: track position variation every 1 second
+            if (Math.hypot(ayuwoki.x - ayuwoki.lastX, ayuwoki.y - ayuwoki.lastY) < 4) {
+                ayuwoki.stuckTimer += dt;
+                if (ayuwoki.stuckTimer >= 1.0) {
+                    ayuwoki.stuckBoostTimer = 5.0; // 5s gain boost
+                    ayuwoki.stuckTimer = 0;
+                }
+            } else {
+                ayuwoki.stuckTimer = 0;
+            }
+            ayuwoki.lastX = ayuwoki.x;
+            ayuwoki.lastY = ayuwoki.y;
+
+            // Attacking validation
+            if (minDist < 35) {
+                if (ayuwoki.attackCooldown <= 0) {
+                    executeAyuwokiMeleeStrike(target, stats.damage);
+                    ayuwoki.attackCooldown = 0.9;
+                }
+            }
+
+            if (ayuwoki.attackCooldown > 0) {
+                ayuwoki.attackCooldown -= dt;
+            }
+
+            syncAyuwokiState();
+        }
+
+        function executeAyuwokiMeleeStrike(victim, damageVal) {
+            // Apply speed recovery buffer on victim client
+            if (victim.id === myClientId) {
+                localPlayer.hp = Math.max(0, localPlayer.hp - damageVal);
+                localPlayer.lastDamagedTime = Date.now();
+                localPlayer.hitBoostTimer = 1.0; // 1s survival speed boost
+
+                if (localPlayer.hp < 50) localPlayer.injured = true;
+                if (activeCast) activeCast = null; // Interrupted cast
+
+                if (localPlayer.hp <= 0) {
+                    localPlayer.isDead = true;
+                    socket.send(JSON.stringify({ type: 'jumpscare_kill', victimId: myClientId }));
+                }
+            }
+        }
+
+        function syncAyuwokiState() {
+            socket.send(JSON.stringify({
+                type: 'ayuwoki_sync',
+                ayuwokiState: {
+                    x: ayuwoki.x,
+                    y: ayuwoki.y,
+                    rage: ayuwoki.rage,
+                    state: ayuwoki.state,
+                    targetId: ayuwoki.targetId
+                }
+            }));
+        }
+
+        function getAyuwokiRageAttributes(rageVal) {
+            let speedMult = 1.0;
+            let stunRecovery = 1.0;
+            let doorBreakSpeed = 1.0;
+            let damage = 20;
+
+            if (rageVal >= 25 && rageVal < 40) {
+                speedMult = 1.05;
+                stunRecovery = 1.05;
+                damage = 28;
+            } else if (rageVal >= 40 && rageVal < 70) {
+                speedMult = 1.10;
+                stunRecovery = 1.05;
+                doorBreakSpeed = 1.10;
+                damage = 34;
+            } else if (rageVal >= 70 && rageVal < 90) {
+                speedMult = 1.33; // Near sprint speed parity
+                stunRecovery = 1.20;
+                doorBreakSpeed = 1.30;
+                damage = 40;
+            } else if (rageVal >= 90) {
+                speedMult = 1.37; // 3% faster than sprint
+                stunRecovery = 1.50;
+                doorBreakSpeed = 5.0; // 0.5s door bypass speed multiplier
+                damage = 45;
+            }
+
+            return {
+                speed: 3.75 * speedMult, // 25% slower than sprint (3.75) base multiplier
+                stunRecovery,
+                doorBreakSpeed,
+                damage
+            };
+        }
+
+        // ========================================================
+        // INVENTORY UTILS AND GROUND ITEMS SYSTEM
+        // ========================================================
+        function selectInventorySlot(index) {
+            localPlayer.activeSlot = index;
+            const slots = document.querySelectorAll('.inv-slot');
+            slots.forEach((s, idx) => {
+                if (idx === index) s.classList.add('active');
+                else s.classList.remove('active');
+            });
+        }
+
+        // Handle hotbar click selection
+        document.querySelectorAll('.inv-slot').forEach(slot => {
+            slot.onclick = () => {
+                selectInventorySlot(parseInt(slot.getAttribute('data-slot')));
+                localPlayer.lastActionTime = Date.now();
+            };
         });
 
-        window.addEventListener("keyup", (e) => {
-            if (!game.inRoom) return;
-            const k = e.key.toLowerCase();
-            if (k === 'w') localInput.w = false;
-            if (k === 's') localInput.s = false;
-            if (k === 'a') localInput.a = false;
-            if (k === 'd') localInput.d = false;
-            if (e.key === 'Shift') {
-                localInput.shift = false;
-                touchState.isSprinting = false;
+        function triggerUseItemAction() {
+            if (localPlayer.isDead || activeCast) return;
+            const slotData = localPlayer.inventory[localPlayer.activeSlot];
+            if (!slotData) return;
+
+            // Consumable configurations
+            let castTime = 0;
+            if (slotData.type === 'bandage') castTime = 8000;
+            else if (slotData.type === 'energy_drink') castTime = 4000;
+            else if (slotData.type === 'snickers') castTime = 1000;
+            else if (slotData.type === 'medicine') castTime = 1000;
+            else if (slotData.type === 'camera') {
+                useCameraFlashItem(slotData);
+                return;
+            } else if (slotData.type === 'baseball_bat') {
+                useBaseballBatMelee(slotData);
+                return;
             }
-        });
 
-        window.addEventListener("mousemove", (e) => {
-            if (!game.inRoom) return;
-            const dx = e.clientX - canvas.width/2;
-            const dy = e.clientY - canvas.height/2;
-            localInput.angle = Math.atan2(dy, dx);
-        });
+            activeCast = {
+                type: slotData.type,
+                start: Date.now(),
+                duration: castTime
+            };
+        }
 
-        window.addEventListener("click", (e) => {
-            // Check if user clicked options or game canvas elements
-            if (!game.inRoom) return;
-            if (e.clientY < canvas.height - 100) {
-                game.useActiveItem();
+        function finishConsumableItemCast() {
+            if (!activeCast) return;
+            const slotData = localPlayer.inventory[localPlayer.activeSlot];
+            if (!slotData) { activeCast = null; return; }
+
+            if (activeCast.type === 'bandage') {
+                localPlayer.hp = Math.min(100, localPlayer.hp + 50);
+                localPlayer.injured = false; // cures injured state
+            } else if (activeCast.type === 'energy_drink') {
+                localPlayer.stamina = 100;
+                localPlayer.staminaLockTimer = 3.0; // lock infinite for 3s
+            } else if (activeCast.type === 'snickers') {
+                localPlayer.stamina = Math.min(100, localPlayer.stamina + 35);
+                localPlayer.hp = Math.min(100, localPlayer.hp + 20);
+                localPlayer.speedBuffTimer = 10.0;
+            } else if (activeCast.type === 'medicine') {
+                localPlayer.medicineRegenTimer = 25.0; // 2 HP every 0.5s up to 100 HP
+                localPlayer.injured = false;
             }
-        });
 
-        // TOUCH CONTROLS MOBILE
-        canvas.addEventListener("touchstart", (e) => {
-            if (!game.inRoom) return;
-            for (let t = 0; t < e.changedTouches.length; t++) {
-                let touch = e.changedTouches[t];
-                if (touch.clientX < canvas.width / 2) {
-                    // Left movement joystick
-                    touchState.leftTouchId = touch.identifier;
-                    touchState.leftStart = {x: touch.clientX, y: touch.clientY};
-                    touchState.leftMove = {x: touch.clientX, y: touch.clientY};
-                    // Double touch triggers sprint on mobile
-                    touchState.isSprinting = true;
+            // Reduce stack or remove item
+            slotData.qty--;
+            if (slotData.qty <= 0) {
+                localPlayer.inventory[localPlayer.activeSlot] = null;
+            }
+            activeCast = null;
+            renderInventoryUI();
+        }
+
+        let cameraFlashTimer = 0;
+        let blindTimer = 0;
+
+        function useCameraFlashItem(item) {
+            if (item.cooldown > 0) return;
+
+            item.cooldown = 20.0; // 20s CD
+            cameraFlashTimer = 0.1; // trigger white screen layout delay
+
+            // blinding check on closest monster
+            const dToAyuwoki = Math.hypot(ayuwoki.x - localPlayer.x, ayuwoki.y - localPlayer.y);
+            const angleToAyuwoki = Math.atan2(ayuwoki.y - localPlayer.y, ayuwoki.x - localPlayer.x);
+            const angleOffset = Math.abs(localPlayer.angle - angleToAyuwoki);
+
+            if (dToAyuwoki < 400 && angleOffset < 0.6) {
+                // Flash hits Ayuwoki
+                socket.send(JSON.stringify({
+                    type: 'ayuwoki_sync',
+                    ayuwokiState: {
+                        stunTimer: 2.5,
+                        rage: Math.min(100, ayuwoki.rage + 8)
+                    }
+                }));
+            }
+
+            // blinding check on neighboring clients
+            for (const pId in players) {
+                if (pId === myClientId) continue;
+                const p = players[pId];
+                const d = Math.hypot(p.x - localPlayer.x, p.y - localPlayer.y);
+                const a = Math.atan2(p.y - localPlayer.y, p.x - localPlayer.x);
+                if (d < 400 && Math.abs(localPlayer.angle - a) < 0.6) {
+                    // Send flash notification (simplified via canvas flash logic)
+                }
+            }
+            renderInventoryUI();
+        }
+
+        let baseballSwingTimer = 0;
+
+        function useBaseballBatMelee(item) {
+            if (baseballSwingTimer > 0) return;
+
+            baseballSwingTimer = 0.3; // Swing action duration
+            const dist = Math.hypot(ayuwoki.x - localPlayer.x, ayuwoki.y - localPlayer.y);
+            const angleToAyuwoki = Math.atan2(ayuwoki.y - localPlayer.y, ayuwoki.x - localPlayer.x);
+            const angleOffset = Math.abs(localPlayer.angle - angleToAyuwoki);
+
+            if (dist < 70 && angleOffset < 0.8) {
+                // Success hit! Stun Ayuwoki for 5 seconds
+                socket.send(JSON.stringify({
+                    type: 'ayuwoki_sync',
+                    ayuwokiState: {
+                        stunTimer: 5.0,
+                        rage: Math.min(100, ayuwoki.rage + 8)
+                    }
+                }));
+
+                // Destroy the baseball bat
+                localPlayer.inventory[localPlayer.activeSlot] = null;
+                renderInventoryUI();
+            } else {
+                // Missed swing cooldown penalty
+                baseballSwingTimer = 1.5;
+            }
+        }
+
+        function triggerDropAction() {
+            if (localPlayer.isDead) return;
+            const slotData = localPlayer.inventory[localPlayer.activeSlot];
+            if (!slotData) return;
+
+            // Drops 50 pixels in direction facing, checking boundary walls
+            let dropX = localPlayer.x + Math.cos(localPlayer.angle) * 50;
+            let dropY = localPlayer.y + Math.sin(localPlayer.angle) * 50;
+
+            if (checkMovementCollisions(dropX, dropY, 8)) {
+                // Revert drop coordinates closer to player
+                dropX = localPlayer.x;
+                dropY = localPlayer.y;
+            }
+
+            socket.send(JSON.stringify({
+                type: 'item_drop',
+                itemType: slotData.type,
+                x: dropX,
+                y: dropY,
+                qty: slotData.qty || 1,
+                cooldown: slotData.cooldown || 0
+            }));
+
+            localPlayer.inventory[localPlayer.activeSlot] = null;
+            renderInventoryUI();
+        }
+
+        function triggerInteractAction() {
+            if (localPlayer.isDead) return;
+
+            // 1. Closest ground item pickup
+            let closestItem = null;
+            let minItemDist = 60;
+            itemsOnGround.forEach(item => {
+                const dist = Math.hypot(item.x - localPlayer.x, item.y - localPlayer.y);
+                if (dist < minItemDist) {
+                    minItemDist = dist;
+                    closestItem = item;
+                }
+            });
+
+            if (closestItem) {
+                // Determine destination inventory slot
+                let targetSlot = -1;
+                // Search for stackable slots of the same item type
+                const stackable = ['bandage', 'energy_drink', 'snickers', 'medicine'];
+                if (stackable.includes(closestItem.type)) {
+                    targetSlot = localPlayer.inventory.findIndex(s => s && s.type === closestItem.type && s.qty < 5);
+                }
+                if (targetSlot === -1) {
+                    targetSlot = localPlayer.inventory.findIndex(s => s === null);
+                }
+
+                if (targetSlot !== -1) {
+                    socket.send(JSON.stringify({
+                        type: 'item_pickup',
+                        itemId: closestItem.id,
+                        slot: targetSlot
+                    }));
+                }
+                return;
+            }
+
+            // 2. Closed / Open metal Doors toggling
+            let closestDoor = null;
+            let minDoorDist = 70;
+            doors.forEach(d => {
+                const dist = Math.hypot(d.x - localPlayer.x, d.y - localPlayer.y);
+                if (dist < minDoorDist) {
+                    minDoorDist = dist;
+                    closestDoor = d;
+                }
+            });
+
+            if (closestDoor && closestDoor.state !== 'broken') {
+                const nextState = closestDoor.state === 'closed' ? 'open' : 'closed';
+                socket.send(JSON.stringify({
+                    type: 'door_interact',
+                    doorId: closestDoor.id,
+                    state: nextState
+                }));
+                return;
+            }
+
+            // 3. Drawer storage search actions
+            let closestLootSpot = null;
+            let minLootDist = 65;
+            lootSpots.forEach(s => {
+                const dist = Math.hypot(s.x - localPlayer.x, s.y - localPlayer.y);
+                if (dist < minLootDist) {
+                    minLootDist = dist;
+                    closestLootSpot = s;
+                }
+            });
+
+            if (closestLootSpot && !closestLootSpot.searched) {
+                triggerLootSearchProgress(closestLootSpot);
+            }
+        }
+
+        let searchingSpot = null;
+        let searchTimer = 0;
+
+        function triggerLootSearchProgress(spot) {
+            searchingSpot = spot;
+            searchTimer = 1.5; // 1.5s search timer progress
+        }
+
+        function updateLootSearch(dt) {
+            if (!searchingSpot) return;
+
+            searchTimer -= dt;
+            const elapsed = 1.5 - searchTimer;
+            searchingSpot.searchProgress = Math.min(100, (elapsed / 1.5) * 100);
+
+            // Block movement or action changes while searching
+            localPlayer.x = localPlayer.x;
+            localPlayer.y = localPlayer.y;
+
+            if (searchTimer <= 0) {
+                searchingSpot.searched = true;
+                searchingSpot.searchProgress = 0;
+
+                // 45% chance to roll an item from the pool
+                if (Math.random() < 0.45) {
+                    const itemPool = ['bandage', 'camera', 'energy_drink', 'snickers', 'baseball_bat', 'medicine'];
+                    const picked = itemPool[Math.floor(Math.random() * itemPool.length)];
+
+                    socket.send(JSON.stringify({
+                        type: 'item_drop',
+                        itemType: picked,
+                        x: searchingSpot.x,
+                        y: searchingSpot.y + 25,
+                        qty: 1
+                    }));
+                }
+                searchingSpot = null;
+            }
+        }
+
+        function addItemToInventory(itemData, slot) {
+            if (localPlayer.inventory[slot] && localPlayer.inventory[slot].type === itemData.type) {
+                localPlayer.inventory[slot].qty += itemData.qty;
+            } else {
+                localPlayer.inventory[slot] = {
+                    type: itemData.type,
+                    qty: itemData.qty,
+                    cooldown: itemData.cooldown || 0
+                };
+            }
+            renderInventoryUI();
+        }
+
+        function renderInventoryUI() {
+            const slots = document.querySelectorAll('.inv-slot');
+            localPlayer.inventory.forEach((item, idx) => {
+                const s = slots[idx];
+                const qtySpan = s.querySelector('.inv-qty');
+                const nameSpan = s.querySelector('.inv-name');
+
+                if (item) {
+                    qtySpan.textContent = item.qty > 1 ? "x" + item.qty : "";
+                    nameSpan.textContent = item.type.toUpperCase().replace("_", " ");
+                    s.style.background = "#300";
                 } else {
-                    // Right look joystick
-                    touchState.rightTouchId = touch.identifier;
-                    touchState.rightStart = {x: touch.clientX, y: touch.clientY};
-                    touchState.rightMove = {x: touch.clientX, y: touch.clientY};
+                    qtySpan.textContent = "";
+                    nameSpan.textContent = "EMPTY";
+                    s.style.background = "#111";
                 }
-            }
-        }, {passive:true});
+            });
+        }
 
-        canvas.addEventListener("touchmove", (e) => {
-            if (!game.inRoom) return;
-            for (let t = 0; t < e.changedTouches.length; t++) {
-                let touch = e.changedTouches[t];
-                if (touch.identifier === touchState.leftTouchId) {
-                    let dx = touch.clientX - touchState.leftStart.x;
-                    let dy = touch.clientY - touchState.leftStart.y;
-                    let dist = Math.sqrt(dx*dx + dy*dy);
-                    if (dist > 50) {
-                        touchState.leftMove = {
-                            x: touchState.leftStart.x + (dx/dist)*50,
-                            y: touchState.leftStart.y + (dy/dist)*50
-                        };
+        // ========================================================
+        // DAY NIGHT WORLD SCHEDULER (HOST ONLY evaluate)
+        // ========================================================
+        function tickWorldCycleTime(dt) {
+            if (networkRole !== 'host') return;
+
+            localCycleTickTimer += dt;
+            if (localCycleTickTimer >= 1.0) {
+                cycleTimer--;
+                localCycleTickTimer = 0;
+
+                if (cycleTimer <= 0) {
+                    if (cycle === 'day') {
+                        cycle = 'night';
+                        cycleTimer = 300; // 5 mins night cycle
+                        // Reset Monster spawn location safely at the top-left area
+                        ayuwoki.x = 400;
+                        ayuwoki.y = 400;
+                        ayuwoki.rage = 0;
                     } else {
-                        touchState.leftMove = {x: touch.clientX, y: touch.clientY};
+                        cycle = 'day';
+                        cycleTimer = 60; // 1 min day prep
                     }
-                } else if (touch.identifier === touchState.rightTouchId) {
-                    let dx = touch.clientX - touchState.rightStart.x;
-                    let dy = touch.clientY - touchState.rightStart.y;
-                    let dist = Math.sqrt(dx*dx + dy*dy);
-                    if (dist > 50) {
-                        touchState.rightMove = {
-                            x: touchState.rightStart.x + (dx/dist)*50,
-                            y: touchState.rightStart.y + (dy/dist)*50
-                        };
-                    } else {
-                        touchState.rightMove = {x: touch.clientX, y: touch.clientY};
+                }
+
+                // Increment Rage over time: +1 point every 4 seconds
+                if (cycle === 'night') {
+                    if (cycleTimer % 4 === 0) {
+                        const prevRage = ayuwoki.rage;
+                        ayuwoki.rage = Math.min(100, ayuwoki.rage + 1);
+                        evaluateRageTiers(prevRage, ayuwoki.rage);
                     }
-                    localInput.angle = Math.atan2(dy, dx);
+                }
+
+                socket.send(JSON.stringify({
+                    type: 'day_night_tick',
+                    cycle: cycle,
+                    cycleTimer: cycleTimer
+                }));
+            }
+        }
+
+        // Rage tiers notification trigger thresholds
+        function evaluateRageTiers(oldVal, newVal) {
+            let tier = 0;
+            let title = "";
+            let sub = "";
+
+            if (oldVal < 25 && newVal >= 25) {
+                tier = 2;
+                title = "RAGE 2";
+                sub = "Ayuwoki has gotten a speed boost..";
+            } else if (oldVal < 40 && newVal >= 40) {
+                tier = 3;
+                title = "RAGE 3";
+                sub = "it becomes more impatient, its terror becomes more unnoticeable, and your fear grows it.";
+            } else if (oldVal < 70 && newVal >= 70) {
+                tier = 4;
+                title = "RAGE 4";
+                sub = "you did it, you are freeing one of Ayuwoki's demons, and you no longer feel 'alone'.";
+            } else if (oldVal < 90 && newVal >= 90) {
+                tier = 5;
+                title = "RAGE 5 - not the good guy anymore -";
+                sub = "once you look behind, It will be the last thing you'll ever see. praying for mercy.";
+            }
+
+            if (tier > 0) {
+                socket.send(JSON.stringify({
+                    type: 'rage_notif',
+                    tier, title, subtitle: sub
+                }));
+            }
+        }
+
+        let rageAlertTimer = 0;
+        function displayRageNotification(tier, title, subtitle) {
+            document.getElementById('rage-alert-title').textContent = title;
+            document.getElementById('rage-alert-sub').textContent = subtitle;
+            const el = document.getElementById('rage-alert');
+            el.classList.remove('hidden');
+            rageAlertTimer = 7.0; // displays for 7 seconds
+        }
+
+        // ========================================================
+        // CANVAS WORLD GRAPHICS AND VISIBILITY RENDERER
+        // ========================================================
+        function worldToScreen(wx, wy) {
+            const screenX = wx - localPlayer.x + canvas.width/2;
+            const screenY = wy - localPlayer.y + canvas.height/2;
+            return { x: screenX, y: screenY };
+        }
+
+        function drawGameGraphics() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Shaking Vignette Screen calculations
+            const dToAyu = Math.hypot(ayuwoki.x - localPlayer.x, ayuwoki.y - localPlayer.y);
+            const rageStats = getAyuwokiRageAttributes(ayuwoki.rage);
+            
+            let terrorRad = (ayuwoki.rage >= 90) ? 0 : (350 * (rageStats.speed / 3.75));
+            let shakeX = 0; let shakeY = 0;
+
+            if (dToAyu < terrorRad && !localPlayer.isDead) {
+                const intensity = (1 - (dToAyu / terrorRad)) * 12;
+                if (options.screenshake) {
+                    shakeX = (Math.random() - 0.5) * intensity;
+                    shakeY = (Math.random() - 0.5) * intensity;
+                    ctx.translate(shakeX, shakeY);
                 }
             }
-        }, {passive:true});
 
-        canvas.addEventListener("touchend", (e) => {
-            if (!game.inRoom) return;
-            for (let t = 0; t < e.changedTouches.length; t++) {
-                let touch = e.changedTouches[t];
-                if (touch.identifier === touchState.leftTouchId) {
-                    touchState.leftTouchId = null;
-                    touchState.isSprinting = false;
-                } else if (touch.identifier === touchState.rightTouchId) {
-                    touchState.rightTouchId = null;
+            // Draw forest floor grass background
+            ctx.fillStyle = "#0c150c";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Background dynamic particle effects
+            particles.forEach(p => {
+                const screenPos = worldToScreen(p.x, p.y);
+                ctx.fillStyle = `rgba(180, 195, 180, ${p.alpha})`;
+                ctx.beginPath();
+                ctx.arc(screenPos.x, screenPos.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Draw dynamic metal Doors state
+            doors.forEach(d => {
+                const screenPos = worldToScreen(d.x, d.y);
+                ctx.save();
+                ctx.translate(screenPos.x, screenPos.y);
+                if (d.orient === 'h') {
+                    if (d.state === 'closed') {
+                        ctx.fillStyle = "#666";
+                        ctx.fillRect(-d.width/2, -d.height/2, d.width, d.height);
+                    } else if (d.state === 'open') {
+                        ctx.fillStyle = "rgba(100,100,100,0.5)";
+                        ctx.fillRect(-d.width/2, -d.height/2 - 30, d.height, d.width);
+                    } else { // broken
+                        ctx.fillStyle = "#3a1a1a";
+                        ctx.font = "8px Courier";
+                        ctx.fillText("SPLINTERS", -20, 0);
+                    }
+                } else {
+                    if (d.state === 'closed') {
+                        ctx.fillStyle = "#666";
+                        ctx.fillRect(-d.height/2, -d.width/2, d.height, d.width);
+                    } else if (d.state === 'open') {
+                        ctx.fillStyle = "rgba(100,100,100,0.5)";
+                        ctx.fillRect(-d.height/2 - 30, -d.width/2, d.width, d.height);
+                    } else { // broken
+                        ctx.fillStyle = "#3a1a1a";
+                        ctx.font = "8px Courier";
+                        ctx.fillText("RUBBLE", -15, 0);
+                    }
+                }
+                ctx.restore();
+            });
+
+            // Draw Searchable storage nodes (drawers / bookshelves)
+            lootSpots.forEach(s => {
+                const screenPos = worldToScreen(s.x, s.y);
+                ctx.save();
+                ctx.translate(screenPos.x, screenPos.y);
+                ctx.fillStyle = s.searched ? "#201205" : "#4a2c0f";
+                ctx.fillRect(-22, -22, 44, 44);
+                ctx.strokeStyle = "#ff0000";
+                ctx.lineWidth = 1.5;
+                ctx.strokeRect(-22, -22, 44, 44);
+
+                // Drawer handles styling details
+                ctx.fillStyle = "#888";
+                ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI*2); ctx.fill();
+
+                if (s.searchProgress > 0 && s.searchProgress < 100) {
+                    ctx.fillStyle = "#0f0";
+                    ctx.fillRect(-22, -35, (s.searchProgress / 100) * 44, 6);
+                }
+                ctx.restore();
+            });
+
+            // Render ground dropped items
+            itemsOnGround.forEach(item => {
+                const screenPos = worldToScreen(item.x, item.y);
+                ctx.fillStyle = "#ff0000";
+                ctx.beginPath();
+                ctx.arc(screenPos.x, screenPos.y, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "9px Courier New";
+                ctx.fillText(item.type.toUpperCase(), screenPos.x - 20, screenPos.y - 12);
+            });
+
+            // Draw structured buildings walls
+            walls.forEach(w => {
+                const p1 = worldToScreen(w.x1, w.y1);
+                const p2 = worldToScreen(w.x2, w.y2);
+                ctx.strokeStyle = "#444";
+                ctx.lineWidth = 6;
+                ctx.beginPath();
+                ctx.moveTo(p1.x, p1.y);
+                ctx.lineTo(p2.x, p2.y);
+                ctx.stroke();
+            });
+
+            // Render trees
+            trees.forEach(t => {
+                const screenPos = worldToScreen(t.x, t.y);
+                ctx.fillStyle = "#0a220a";
+                ctx.beginPath();
+                ctx.arc(screenPos.x, screenPos.y, t.radius, 0, Math.PI*2);
+                ctx.fill();
+                ctx.strokeStyle = "#051105";
+                ctx.lineWidth = 4;
+                ctx.stroke();
+            });
+
+            // Draw other joined players
+            for (const pId in players) {
+                if (pId === myClientId && !localPlayer.isDead) continue;
+                const p = players[pId];
+                if (p.isDead) continue;
+
+                const screenPos = worldToScreen(p.x, p.y);
+                ctx.save();
+                ctx.translate(screenPos.x, screenPos.y);
+                ctx.rotate(p.angle);
+
+                // Body rendering
+                ctx.fillStyle = "#1a52d1"; // Blue circle model
+                ctx.beginPath();
+                ctx.arc(0, 0, 18, 0, Math.PI*2);
+                ctx.fill();
+
+                // Flashlight representation (left hand item extension)
+                ctx.fillStyle = "#888";
+                ctx.fillRect(8, -14, 15, 6);
+                ctx.restore();
+
+                // Display Tag labels above characters
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "10px Courier New";
+                ctx.textAlign = "center";
+                ctx.fillText(p.name, screenPos.x, screenPos.y - 25);
+            }
+
+            // Draw primary local player character
+            if (!localPlayer.isDead) {
+                const screenPos = worldToScreen(localPlayer.x, localPlayer.y);
+                ctx.save();
+                ctx.translate(screenPos.x, screenPos.y);
+                ctx.rotate(localPlayer.angle);
+
+                // Main character model circle
+                ctx.fillStyle = "#1a75d1";
+                ctx.beginPath();
+                ctx.arc(0, 0, 18, 0, Math.PI*2);
+                ctx.fill();
+                ctx.strokeStyle = "#ffffff";
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+
+                // Flashlight left hand model
+                ctx.fillStyle = "#aaa";
+                ctx.fillRect(8, -14, 15, 6);
+                ctx.restore();
+            }
+
+            // Draw Ayuwoki Monster
+            if (cycle === 'night' && ayuwoki.x > 0) {
+                const screenPos = worldToScreen(ayuwoki.x, ayuwoki.y);
+                ctx.save();
+                ctx.translate(screenPos.x, screenPos.y);
+                ctx.rotate(ayuwoki.angle);
+
+                // Base horrific circle body model with white hair details
+                ctx.fillStyle = "#0a0a0a";
+                ctx.beginPath();
+                ctx.arc(0, 0, 22, 0, Math.PI * 2);
+                ctx.fill();
+
+                // White chaotic creepy hair rendering strands
+                ctx.strokeStyle = "#ffffff";
+                ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                ctx.arc(-8, 0, 18, Math.PI * 0.5, Math.PI * 1.5);
+                ctx.stroke();
+
+                // Dreadful glowing white eyes
+                ctx.fillStyle = "#ffffff";
+                ctx.beginPath();
+                ctx.arc(8, -8, 3.5, 0, Math.PI*2);
+                ctx.arc(8, 8, 3.5, 0, Math.PI*2);
+                ctx.fill();
+
+                ctx.restore();
+            }
+
+            // Flashlight Raycasted Visibility Mask Calculations
+            drawDynamicFlashlightRaycasting();
+
+            // Low health alert rendering effects
+            if (localPlayer.hp < 100 && !localPlayer.isDead) {
+                const severity = localPlayer.hp <= 50 ? 0.35 : 0.15;
+                ctx.fillStyle = `rgba(180, 0, 0, ${severity})`;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            // Clean transform matrices on screenshake translates
+            if (dToAyu < terrorRad && !localPlayer.isDead && options.screenshake) {
+                ctx.translate(-shakeX, -shakeY);
+            }
+        }
+
+        function drawDynamicFlashlightRaycasting() {
+            maskCanvas.width = canvas.width;
+            maskCanvas.height = canvas.height;
+            const mctx = maskContext;
+
+            // Base night darkness multipliers matching rage configurations
+            let darkness = 0.05;
+            if (cycle === 'night') {
+                darkness = 0.50;
+                if (ayuwoki.rage >= 40) darkness = 0.60;
+                if (ayuwoki.rage >= 70) darkness = 0.75;
+                if (ayuwoki.rage >= 90) darkness = 0.92;
+            }
+
+            mctx.fillStyle = `rgba(0, 0, 0, ${darkness})`;
+            mctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Cut dynamic cones inside darkness using Destination-Out compositing mask
+            mctx.globalCompositeOperation = 'destination-out';
+
+            // Iterate and draw visibility polygons for living players
+            for (const pId in players) {
+                const p = players[pId];
+                if (p.isDead) continue;
+
+                const screenPos = worldToScreen(p.x, p.y);
+                const spreadAngle = 0.45; // Flashlight cone spread angle
+                const step = 0.015;
+                const maxFlashlightDist = 520;
+
+                const points = [{ x: screenPos.x, y: screenPos.y }];
+                const dynamicWalls = [...walls, ...getDoorWalls()];
+
+                for (let r = p.angle - spreadAngle; r <= p.angle + spreadAngle; r += step) {
+                    const rx = p.x;
+                    const ry = p.y;
+                    const rdx = Math.cos(r) * maxFlashlightDist;
+                    const rdy = Math.sin(r) * maxFlashlightDist;
+
+                    let closestDist = maxFlashlightDist;
+                    let endX = p.x + rdx;
+                    let endY = p.y + rdy;
+
+                    const ray = { x: rx, y: ry, dx: rdx, dy: rdy };
+                    for (const w of dynamicWalls) {
+                        const hit = evaluateRayIntersection(ray, w);
+                        if (hit) {
+                            const d = Math.hypot(hit.x - p.x, hit.y - p.y);
+                            if (d < closestDist) {
+                                closestDist = d;
+                                endX = hit.x;
+                                endY = hit.y;
+                            }
+                        }
+                    }
+
+                    const screenTarget = worldToScreen(endX, endY);
+                    points.push(screenTarget);
+                }
+
+                mctx.beginPath();
+                mctx.moveTo(points[0].x, points[0].y);
+                for (let i = 1; i < points.length; i++) {
+                    mctx.lineTo(points[i].x, points[i].y);
+                }
+                mctx.closePath();
+
+                const grad = mctx.createRadialGradient(screenPos.x, screenPos.y, 10, screenPos.x, screenPos.y, maxFlashlightDist);
+                grad.addColorStop(0, "rgba(0, 0, 0, 1.0)");
+                grad.addColorStop(0.7, "rgba(0, 0, 0, 0.4)");
+                grad.addColorStop(1, "rgba(0, 0, 0, 0.0)");
+
+                mctx.fillStyle = grad;
+                mctx.fill();
+            }
+
+            mctx.globalCompositeOperation = 'source-over';
+            ctx.drawImage(maskCanvas, 0, 0);
+        }
+
+        function evaluateRayIntersection(ray, wall) {
+            const x1 = wall.x1, y1 = wall.y1, x2 = wall.x2, y2 = wall.y2;
+            const x3 = ray.x, y3 = ray.y, x4 = ray.x + ray.dx, y4 = ray.y + ray.dy;
+
+            const den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+            if (den === 0) return null;
+
+            const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den;
+            const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / den;
+
+            if (t >= 0 && t <= 1 && u >= 0) {
+                return { x: x1 + t * (x2 - x1), y: y1 + t * (y2 - y1) };
+            }
+            return null;
+        }
+
+        // ========================================================
+        // DEATH AND RESPOND MECHANICS ROUTINES
+        // ========================================================
+        function triggerLocalJumpscare() {
+            const jumpscareOverlay = document.getElementById('jumpscare-overlay');
+            const spectatorOverlay = document.getElementById('spectator-overlay');
+
+            if (options.epileptic) {
+                jumpscareOverlay.style.backgroundColor = "#000000";
+                document.getElementById('jumpscare-title').style.color = "#ffffff";
+                document.getElementById('jumpscare-title').textContent = "THE AYUWOKI GOT YOU.";
+            } else {
+                jumpscareOverlay.style.backgroundColor = "#ff0000";
+                document.getElementById('jumpscare-title').style.color = "#000000";
+                document.getElementById('jumpscare-title').textContent = "HE SEES YOU";
+            }
+
+            jumpscareOverlay.classList.remove('hidden');
+
+            // 2s jumpscare execution timer
+            setTimeout(() => {
+                jumpscareOverlay.style.transition = "opacity 1s";
+                jumpscareOverlay.style.opacity = 0;
+
+                setTimeout(() => {
+                    jumpscareOverlay.classList.add('hidden');
+                    jumpscareOverlay.style.opacity = 1;
+
+                    // Transition directly to Spectator Mode layout
+                    spectatorOverlay.classList.remove('hidden');
+                }, 1000);
+            }, 2000);
+        }
+
+        document.getElementById('respawn-btn').onclick = () => {
+            localPlayer.x = 2000 + (Math.random() - 0.5) * 100;
+            localPlayer.y = 2000 + (Math.random() - 0.5) * 100;
+            localPlayer.hp = 100;
+            localPlayer.stamina = 100;
+            localPlayer.isDead = false;
+            localPlayer.injured = false;
+
+            document.getElementById('spectator-overlay').classList.add('hidden');
+        };
+
+        // ========================================================
+        // MAIN TICK RUN LOOP
+        // ========================================================
+        let isGameLoopActive = false;
+
+        function startGameLoop() {
+            if (isGameLoopActive) return;
+            isGameLoopActive = true;
+            lastTime = performance.now();
+            requestAnimationFrame(gameLoopTick);
+        }
+
+        function gameLoopTick(time) {
+            let dt = (time - lastTime) / 1000;
+            if (dt > 0.1) dt = 0.1; // clamp lag spikes
+            lastTime = time;
+
+            // Frame and Ping analytics
+            frameCount++;
+            if (time - lastFpsUpdate >= 1000) {
+                fps = frameCount;
+                frameCount = 0;
+                lastFpsUpdate = time;
+
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
                 }
             }
-        }, {passive:true});
 
-        // Touch handlers for on-screen mobile utility buttons
-        document.getElementById("mobileDrop").addEventListener("touchstart", (e) => {
-            e.preventDefault();
-            game.dropItem();
-        });
-        document.getElementById("mobileInteract").addEventListener("touchstart", (e) => {
-            e.preventDefault();
-            game.interact();
-        });
-        document.getElementById("mobileUse").addEventListener("touchstart", (e) => {
-            e.preventDefault();
-            game.useActiveItem();
-        });
+            // Sync HUD displays
+            document.getElementById('hp-txt').textContent = Math.ceil(localPlayer.hp);
+            document.getElementById('hp-bar').style.width = localPlayer.hp + "%";
+            document.getElementById('stamina-txt').textContent = Math.ceil(localPlayer.stamina);
+            document.getElementById('stamina-bar').style.width = localPlayer.stamina + "%";
 
-        // INIT SYSTEM
+            document.getElementById('hud-cycle').textContent = cycle.toUpperCase() + " CYCLE";
+            document.getElementById('hud-timer').textContent = formatTimer(cycleTimer);
+
+            if (options.hudstats) {
+                document.getElementById('stats-ping-fps').textContent = `FPS: ${fps} | PING: ${ping}ms`;
+                document.getElementById('stats-ping-fps').style.display = 'block';
+            } else {
+                document.getElementById('stats-ping-fps').style.display = 'none';
+            }
+
+            // Update alerts timer
+            if (rageAlertTimer > 0) {
+                rageAlertTimer -= dt;
+                if (rageAlertTimer <= 0) {
+                    document.getElementById('rage-alert').classList.add('hidden');
+                }
+            }
+
+            // Decays swing bat timer
+            if (baseballSwingTimer > 0) baseballSwingTimer -= dt;
+
+            // Particle Updates
+            particles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                if (p.x < 0) p.x = MAP_SIZE;
+                if (p.x > MAP_SIZE) p.x = 0;
+                if (p.y < 0) p.y = MAP_SIZE;
+                if (p.y > MAP_SIZE) p.y = 0;
+            });
+
+            // Cycle item cool-downs
+            localPlayer.inventory.forEach(item => {
+                if (item && item.cooldown > 0) {
+                    item.cooldown = Math.max(0, item.cooldown - dt);
+                }
+            });
+
+            // Update components
+            updateLocalPlayer(dt);
+            updateLootSearch(dt);
+
+            if (networkRole === 'host') {
+                tickWorldCycleTime(dt);
+            }
+
+            if (currentOwnerId === myClientId) {
+                updateAyuwokiEntity(dt);
+            }
+
+            drawGameGraphics();
+
+            if (isGameLoopActive) {
+                requestAnimationFrame(gameLoopTick);
+            }
+        }
+
+        function formatTimer(sec) {
+            const m = Math.floor(sec / 60);
+            const s = sec % 60;
+            return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+        }
+
+        // Auto execute on page loading
         window.onload = () => {
-            connectSocket();
-            game.updateAndRender();
+            resizeCanvas();
+            detectDeviceLayout();
+            setupJoysticks();
+            connectToServer();
+
+            // Store user client identification metadata
+            myClientId = Math.random().toString(36).substring(2, 9);
         };
     </script>
 </body>
