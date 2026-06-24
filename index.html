@@ -155,6 +155,9 @@
     let escCount = 0;
     let escTimer = null;
 
+    // Throttle do controlador para limitar a 20 requisições por segundo
+    let lastMoveTime = 0;
+
     // --- MENU CONTROLS ---
     function setDevice(device) {
         deviceSelected = device;
@@ -171,8 +174,13 @@
     async function initHostFlow() {
         myRoom = Math.random().toString(36).substring(2, 6).toUpperCase();
         try {
+            // ATUALIZADO: Forçando captura em 480p e 15 FPS
             const stream = await navigator.mediaDevices.getDisplayMedia({
-                video: { frameRate: 15, width: 854, height: 480 }
+                video: { 
+                    width: { ideal: 854, max: 854 }, 
+                    height: { ideal: 480, max: 480 }, 
+                    frameRate: { ideal: 15, max: 15 } 
+                }
             });
             
             isHostActive = true;
@@ -187,10 +195,11 @@
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
 
+            // ATUALIZADO: Intervalo estrito de 66.6ms (~15 FPS)
             setInterval(() => {
                 if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                    canvas.width = 640;
-                    canvas.height = 360;
+                    canvas.width = 854; // Forçando dimensões de 480p
+                    canvas.height = 480;
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                     
                     socket.emit('RemoteEvent', {
@@ -276,6 +285,25 @@
         }
     }
 
+    // --- INPUT SENDER COM LIMITADOR DE 20 REQS/S ---
+    function sendInput(action, data) {
+        if (isHostActive) return;
+
+        // ATUALIZADO: Rate limiter estrito de 20 requisições/s (intervalo de 50ms) aplicado apenas a movimentos de mouse
+        if (action === 'mousemove') {
+            const now = Date.now();
+            if (now - lastMoveTime < 50) return; // Ignora se o intervalo for menor que 50ms
+            lastMoveTime = now;
+        }
+
+        const payload = { type: 'remote_input', room: myRoom, action: action, ...data };
+        socket.emit('RemoteEvent', payload);
+    }
+
+    function sendKey(k, state) {
+        sendInput(state === 'down' ? 'keydown' : 'keyup', { key: k });
+    }
+
     // --- CONTROLES DE INPUT (DRIVER PC) ---
     function setupPCDrivers() {
         const screen = document.getElementById('remote-screen');
@@ -289,15 +317,11 @@
         // Movimento relativo no PointerLock
         document.addEventListener('mousemove', (e) => {
             if (document.pointerLockElement === screen) {
-                // Como o pointer lock está ativo, enviamos de forma incremental aproximada
                 const rect = screen.getBoundingClientRect();
-                // Simulação matemática de coordenadas relativas
                 const x = Math.min(Math.max(0, (e.movementX + rect.width/2) / rect.width), 1);
                 const y = Math.min(Math.max(0, (e.movementY + rect.height/2) / rect.height), 1);
                 
-                socket.emit('RemoteEvent', {
-                    type: 'remote_input', room: myRoom, action: 'mousemove', x, y
-                });
+                sendInput('mousemove', { x, y });
             }
         });
 
@@ -305,14 +329,14 @@
         screen.addEventListener('mousedown', (e) => {
             if (document.pointerLockElement === screen) {
                 const btn = e.button === 2 ? 'right' : 'left';
-                socket.emit('RemoteEvent', { type: 'remote_input', room: myRoom, action: 'mousedown', btn });
+                sendInput('mousedown', { btn });
             }
         });
 
         screen.addEventListener('mouseup', (e) => {
             if (document.pointerLockElement === screen) {
                 const btn = e.button === 2 ? 'right' : 'left';
-                socket.emit('RemoteEvent', { type: 'remote_input', room: myRoom, action: 'mouseup', btn });
+                sendInput('mouseup', { btn });
             }
         });
 
@@ -322,7 +346,7 @@
         window.addEventListener('keydown', (e) => {
             if (document.pointerLockElement === screen) {
                 if (!e.repeat) {
-                    socket.emit('RemoteEvent', { type: 'remote_input', room: myRoom, action: 'keydown', key: e.key });
+                    sendInput('keydown', { key: e.key });
                 }
                 e.preventDefault();
             }
@@ -341,7 +365,7 @@
 
         window.addEventListener('keyup', (e) => {
             if (document.pointerLockElement === screen) {
-                socket.emit('RemoteEvent', { type: 'remote_input', room: myRoom, action: 'keyup', key: e.key });
+                sendInput('keyup', { key: e.key });
                 e.preventDefault();
             }
         });
@@ -360,9 +384,7 @@
             const x = Math.min(Math.max(0, (touch.clientX - rect.left) / rect.width), 1);
             const y = Math.min(Math.max(0, (touch.clientY - rect.top) / rect.height), 1);
             
-            socket.emit('RemoteEvent', {
-                type: 'remote_input', room: myRoom, action: 'mousemove', x, y
-            });
+            sendInput('mousemove', { x, y });
         });
 
         screen.addEventListener('touchend', (e) => {
@@ -372,22 +394,16 @@
                 
                 if (diff < 300 && diff > 0) {
                     // Double Tap = Clique Direito
-                    socket.emit('RemoteEvent', { type: 'remote_input', room: myRoom, action: 'mousedown', btn: 'right' });
-                    setTimeout(() => socket.emit('RemoteEvent', { type: 'remote_input', room: myRoom, action: 'mouseup', btn: 'right' }), 50);
+                    sendInput('mousedown', { btn: 'right' });
+                    setTimeout(() => sendInput('mouseup', { btn: 'right' }), 50);
                 } else {
                     // Single Tap = Clique Esquerdo
-                    socket.emit('RemoteEvent', { type: 'remote_input', room: myRoom, action: 'mousedown', btn: 'left' });
-                    setTimeout(() => socket.emit('RemoteEvent', { type: 'remote_input', room: myRoom, action: 'mouseup', btn: 'left' }), 50);
+                    sendInput('mousedown', { btn: 'left' });
+                    setTimeout(() => sendInput('mouseup', { btn: 'left' }), 50);
                 }
                 lastTap = now;
             }
             isDragging = false;
-        });
-    }
-
-    function sendKey(k, state) {
-        socket.emit('RemoteEvent', {
-            type: 'remote_input', room: myRoom, action: state === 'down' ? 'keydown' : 'keyup', key: k
         });
     }
 </script>
