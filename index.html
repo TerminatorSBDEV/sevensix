@@ -2,342 +2,394 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ezbridge Test | Online AI Moderated Chat</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PC Controller | Remote Screen & Play</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root {
-            --bg: #0d1117;
-            --panel: #161b22;
-            --border: #30363d;
-            --accent: #58a6ff;
-            --text: #c9d1d9;
-            --error: #ff7b72;
+            --bg: #0a0a0a;
+            --panel: #141414;
+            --accent: #00ff88;
+            --text: #ffffff;
+            --border: #222;
         }
 
-        body {
-            margin: 0;
-            background-color: var(--bg);
-            color: var(--text);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
+        body, html {
+            margin: 0; padding: 0; height: 100%;
+            background-color: var(--bg); color: var(--text);
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            overflow: hidden; touch-action: none; user-select: none;
         }
 
-        .chat-container {
-            width: 90%;
-            max-width: 400px;
-            background: var(--panel);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+        /* Telas de Configuração */
+        .screen {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; position: fixed; inset: 0; z-index: 100; background: var(--bg);
         }
 
-        .header {
-            padding: 15px;
-            background: #21262d;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        .box {
+            background: var(--panel); border: 2px solid var(--border); padding: 35px;
+            border-radius: 16px; text-align: center; width: 300px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
 
-        .status {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 0.85rem;
+        .btn {
+            width: 100%; padding: 12px; margin: 10px 0; background: var(--accent);
+            border: none; color: black; font-weight: bold; border-radius: 8px;
+            cursor: pointer; transition: 0.2s; font-size: 1rem;
+        }
+        .btn:hover { background: #00cc6a; transform: scale(1.02); }
+        .btn-secondary { background: #222; color: #fff; border: 1px solid var(--border); }
+        .btn-secondary:hover { background: #333; }
+
+        /* Lista de Servidores Descobertos */
+        .server-list {
+            margin-top: 15px; max-height: 150px; overflow-y: auto;
+            border: 1px solid var(--border); border-radius: 8px; background: #000;
+        }
+        .server-item {
+            padding: 10px; border-bottom: 1px solid var(--border); cursor: pointer;
+            transition: 0.2s; font-family: monospace;
+        }
+        .server-item:hover { background: var(--accent); color: black; }
+
+        /* Streaming Viewport */
+        #viewport {
+            display: none; width: 100vw; height: 100vh;
+            position: fixed; inset: 0; z-index: 10; background: black;
+            justify-content: center; align-items: center;
         }
 
-        .dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #ff7b72;
+        #remote-screen {
+            max-width: 100%; max-height: 100%; object-fit: contain;
+            cursor: none; /* Oculta cursor real para ver o do Host */
         }
 
-        .dot.online {
-            background: #3fb950;
-            box-shadow: 0 0 8px #3fb950;
+        /* Teclado Virtual Mobile */
+        #mobile-keyboard {
+            position: fixed; bottom: 15px; left: 50%; transform: translateX(-50%);
+            display: none; grid-template-columns: repeat(5, 1fr); gap: 6px;
+            background: rgba(0,0,0,0.75); padding: 12px; border-radius: 12px; z-index: 1000;
         }
-
-        .messages-log {
-            height: 300px;
-            padding: 15px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            border-bottom: 1px solid var(--border);
+        .key {
+            background: #2a2a2a; border: 1px solid #444; color: white;
+            width: 50px; height: 50px; display: flex; align-items: center; justify-content: center;
+            font-weight: bold; border-radius: 6px; font-size: 0.9rem;
         }
-
-        .msg {
-            padding: 8px 12px;
-            border-radius: 6px;
-            max-width: 80%;
-            word-wrap: break-word;
-            font-size: 0.95rem;
-            line-height: 1.4;
-            position: relative;
-            transition: all 0.2s;
-        }
-
-        .msg.me {
-            align-self: flex-end;
-            background: #238636;
-            color: white;
-        }
-
-        .msg.other {
-            align-self: flex-start;
-            background: #30363d;
-            color: var(--text);
-        }
-
-        /* Status de pendente (Moderação em andamento) */
-        .msg.pending {
-            opacity: 0.55;
-            filter: grayscale(40%);
-        }
-
-        /* Status de bloqueado */
-        .msg.blocked {
-            align-self: flex-end;
-            background: #44161b !important;
-            border: 1px solid var(--error);
-            color: var(--error);
-        }
-
-        .msg .username {
-            font-size: 0.75rem;
-            opacity: 0.7;
-            margin-bottom: 3px;
-            font-weight: bold;
-        }
-
-        .status-tag {
-            font-size: 0.65rem;
-            text-transform: uppercase;
-            font-weight: bold;
-            opacity: 0.8;
-            margin-top: 4px;
-            display: block;
-        }
-
-        .input-bar {
-            display: flex;
-            padding: 10px;
-            background: #0d1117;
-            gap: 8px;
-        }
-
-        input {
-            flex-grow: 1;
-            background: #010409;
-            border: 1px solid var(--border);
-            color: white;
-            padding: 10px;
-            border-radius: 6px;
-            outline: none;
-            font-size: 0.9rem;
-        }
-
-        input:focus {
-            border-color: var(--accent);
-        }
-
-        button {
-            background: #21262d;
-            border: 1px solid var(--border);
-            color: var(--accent);
-            padding: 10px 15px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-            font-size: 0.9rem;
-            transition: 0.2s;
-        }
-
-        button:hover {
-            background: #30363d;
-            border-color: #8b949e;
-        }
+        .key:active { background: var(--accent); color: black; }
     </style>
 </head>
 <body>
 
-    <div class="chat-container">
-        <div class="header">
-            <span style="font-weight: bold;">Ezbridge Chat (AI Moderated)</span>
-            <div class="status">
-                <div id="status-dot" class="dot"></div>
-                <span id="status-text">Offline</span>
-            </div>
-        </div>
-        
-        <div class="messages-log" id="log">
-            <div class="msg other">
-                <div class="username">System</div>
-                Insira seu apelido abaixo para começar.
-            </div>
-        </div>
-
-        <div class="input-bar">
-            <input type="text" id="user-input" placeholder="Seu apelido..." autocomplete="off">
-            <button id="action-btn" onclick="handleAction()">Join</button>
+    <!-- Passo 1: Escolha do Dispositivo -->
+    <div id="screen-device" class="screen">
+        <div class="box">
+            <h2 style="margin-top:0; color: var(--accent);">PC CONTROLLER</h2>
+            <p style="color:#888;">What device are you on?</p>
+            <button class="btn" onclick="setDevice('mobile')">Mobile</button>
+            <button class="btn btn-secondary" onclick="setDevice('pc')">Computer</button>
         </div>
     </div>
 
+    <!-- Passo 2: Menu de Ações -->
+    <div id="screen-action" class="screen" style="display:none;">
+        <div class="box">
+            <h2 style="margin-top:0; color: var(--accent);">Whatchu wanna do?</h2>
+            <button class="btn" onclick="initHostFlow()">Create Room</button>
+            <button class="btn btn-secondary" onclick="openJoinMenu()">Join a Room</button>
+        </div>
+    </div>
+
+    <!-- Passo 3: Join Menu (Descoberta Ativa de Salas) -->
+    <div id="screen-join" class="screen" style="display:none;">
+        <div class="box">
+            <h3 style="margin-top:0;">Available Rooms</h3>
+            <div id="server-list" class="server-list">
+                <div style="padding:15px; color:#666; font-size:0.8rem;">Searching rooms...</div>
+            </div>
+            <button class="btn btn-secondary" style="margin-top:15px;" onclick="goBackToActions()">Back</button>
+        </div>
+    </div>
+
+    <!-- Tela do Host Ativo (Gerando Link) -->
+    <div id="screen-hosting" class="screen" style="display:none;">
+        <div class="box">
+            <h2 style="color: var(--accent);">ROOM CREATED</h2>
+            <div style="font-size:2rem; font-weight:bold; letter-spacing:4px; margin: 15px 0;" id="room-code-display">----</div>
+            <p style="font-size:0.85rem; color:#888; line-height:1.4;">
+                1. Share this code with your friend.<br>
+                2. Open <b>controlpc.py</b> on your PC and enter this code.
+            </p>
+            <button class="btn btn-secondary" onclick="location.reload()">Stop Stream</button>
+        </div>
+    </div>
+
+    <!-- Viewport da Transmissão (Client View) -->
+    <div id="viewport">
+        <img id="remote-screen" draggable="false">
+    </div>
+
+    <!-- Teclado Virtual para Mobile -->
+    <div id="mobile-keyboard">
+        <div class="key" onpointerdown="sendKey('w','down')" onpointerup="sendKey('w','up')">W</div>
+        <div class="key" onpointerdown="sendKey('a','down')" onpointerup="sendKey('a','up')">A</div>
+        <div class="key" onpointerdown="sendKey('s','down')" onpointerup="sendKey('s','up')">S</div>
+        <div class="key" onpointerdown="sendKey('d','down')" onpointerup="sendKey('d','up')">D</div>
+        <div class="key" onpointerdown="sendKey('e','down')" onpointerup="sendKey('e','up')">E</div>
+        <div class="key" onpointerdown="sendKey('space','down')" onpointerup="sendKey('space','up')" style="grid-column: span 2; width:110px;">SPACE</div>
+        <div class="key" onpointerdown="sendKey('shift','down')" onpointerup="sendKey('shift','up')">SHIFT</div>
+        <div class="key" onpointerdown="sendKey('escape','down')" onpointerup="sendKey('escape','up')">ESC</div>
+    </div>
+
 <script>
-    // --- CONFIGURAÇÃO ---
-    const TUNNEL = "https://considers-scheduling-cities-reseller.trycloudflare.com";
-    const AUTH_KEY = "5bCSf1w40";
+    const TUNNEL = "https://advertising-born-increase-allowing.trycloudflare.com";
+    const AUTH_KEY = "3mg40B4X8";
+    const socket = io(TUNNEL, { auth: { token: AUTH_KEY }, transports: ['websocket'] });
 
-    const socket = io(TUNNEL, { auth: { token: AUTH_KEY } });
+    let deviceSelected = "";
+    let myRoom = "";
+    let isHostActive = false;
+    let activeRooms = new Set();
     
-    let username = "";
-    const log = document.getElementById('log');
-    const input = document.getElementById('user-input');
-    const btn = document.getElementById('action-btn');
-    const dot = document.getElementById('status-dot');
-    const statusText = document.getElementById('status-text');
+    // Controle de saída rápida (2 Escs)
+    let escCount = 0;
+    let escTimer = null;
 
-    // Dicionário para gerenciar mensagens aguardando aprovação da IA
-    const pendingMessages = {};
+    // --- MENU CONTROLS ---
+    function setDevice(device) {
+        deviceSelected = device;
+        document.getElementById('screen-device').style.display = 'none';
+        document.getElementById('screen-action').style.display = 'flex';
+    }
 
-    // --- SOCKET EVENTS ---
-    socket.on('connect', () => {
-        dot.classList.add('online');
-        statusText.innerText = "Online";
-    });
+    function goBackToActions() {
+        document.getElementById('screen-join').style.display = 'none';
+        document.getElementById('screen-action').style.display = 'flex';
+    }
 
-    socket.on('connect_error', (err) => {
-        dot.classList.remove('online');
-        statusText.innerText = "Error";
-        console.error(err);
-    });
+    // --- HOST FLOW ---
+    async function initHostFlow() {
+        myRoom = Math.random().toString(36).substring(2, 6).toUpperCase();
+        try {
+            const stream = await navigator.mediaDevices.getDisplayMedia({
+                video: { frameRate: 15, width: 854, height: 480 }
+            });
+            
+            isHostActive = true;
+            document.getElementById('screen-action').style.display = 'none';
+            document.getElementById('screen-hosting').style.display = 'flex';
+            document.getElementById('room-code-display').innerText = myRoom;
 
-    socket.on('RemoteEvent', (packet) => {
-        if (packet.type === 'chat') {
-            appendMessage(packet.user, packet.text, false);
-        }
-    });
+            const video = document.createElement('video');
+            video.srcObject = stream;
+            video.play();
 
-    // Escuta a resposta de moderação da IA
-    socket.on('ai_response', (data) => {
-        if (data.reqId && data.reqId.startsWith('mod_')) {
-            const pending = pendingMessages[data.reqId];
-            if (!pending) return;
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
 
-            const decision = data.text.trim().toUpperCase();
+            setInterval(() => {
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                    canvas.width = 640;
+                    canvas.height = 360;
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    
+                    socket.emit('RemoteEvent', {
+                        type: 'screen_frame',
+                        room: myRoom,
+                        img: canvas.toDataURL('image/jpeg', 0.45)
+                    });
+                }
+            }, 1000 / 15);
 
-            // Se aprovado, retira o estilo cinza e envia aos outros via Socket
-            if (decision.includes('APPROVED')) {
-                pending.div.classList.remove('pending');
-                const tag = pending.div.querySelector('.status-tag');
-                if (tag) tag.remove();
+            stream.getVideoTracks()[0].onended = () => location.reload();
 
-                socket.emit('RemoteEvent', {
-                    type: 'chat',
-                    user: username,
-                    text: pending.text
-                });
-            } else {
-                // Se reprovado, transforma o balão em vermelho avisando do bloqueio
-                pending.div.classList.remove('pending');
-                pending.div.classList.add('blocked');
-                pending.div.innerHTML = `
-                    <div class="username">System / Moderator</div>
-                    <div>⚠️ Mensagem bloqueada por conter conteúdo impróprio ou tóxico.</div>
-                `;
-            }
-            delete pendingMessages[data.reqId];
-        }
-    });
-
-    socket.on('ai_error', (data) => {
-        if (data.reqId && data.reqId.startsWith('mod_')) {
-            const pending = pendingMessages[data.reqId];
-            if (pending) {
-                pending.div.classList.remove('pending');
-                const tag = pending.div.querySelector('.status-tag');
-                if (tag) tag.innerText = "⚠️ Erro ao verificar";
-                delete pendingMessages[data.reqId];
-            }
-        }
-    });
-
-    // --- CHAT LOGIC ---
-    function handleAction() {
-        if (!username) {
-            const val = input.value.trim();
-            if (!val) return;
-            username = val;
-            input.value = "";
-            input.placeholder = "Escreva uma mensagem...";
-            btn.innerText = "Send";
-            appendMessage("System", `Você entrou como "${username}"`, false);
-        } else {
-            sendMsg();
+        } catch (e) {
+            alert("Screenshare error: " + e.message);
         }
     }
 
-    function sendMsg() {
-        const text = input.value.trim();
-        if (!text) return;
+    // --- DISCOVERY & JOIN FLOW ---
+    function openJoinMenu() {
+        document.getElementById('screen-action').style.display = 'none';
+        document.getElementById('screen-join').style.display = 'flex';
+        
+        activeRooms.clear();
+        document.getElementById('server-list').innerHTML = `<div style="padding:15px; color:#666; font-size:0.8rem;">Searching rooms...</div>`;
+        
+        // Dispara um ping para descobrir salas ativas
+        socket.emit('RemoteEvent', { type: 'room_ping' });
+    }
 
-        // Cria id único para requisição de moderação
-        const reqId = 'mod_' + Date.now() + Math.random().toString(36).substr(2, 4);
+    socket.on('RemoteEvent', (packet) => {
+        // Responder pings de salas se eu for o Host ativo
+        if (packet.type === 'room_ping' && isHostActive) {
+            socket.emit('RemoteEvent', { type: 'room_pong', room: myRoom });
+        }
 
-        // Exibe o balão localmente com status de "Moderando"
-        const messageDiv = appendMessage(username, text, true, true);
+        // Adicionar sala descoberta à lista
+        if (packet.type === 'room_pong' && !isHostActive) {
+            if (!activeRooms.has(packet.room)) {
+                activeRooms.add(packet.room);
+                updateServerList();
+            }
+        }
 
-        // Salva na fila pendente
-        pendingMessages[reqId] = {
-            text: text,
-            div: messageDiv
-        };
+        // Renderizar frame recebido no cliente
+        if (packet.type === 'screen_frame' && packet.room === myRoom && !isHostActive) {
+            document.getElementById('remote-screen').src = packet.img;
+        }
+    });
 
-        // Solicita avaliação da IA local
-        socket.emit('callai', {
-            reqId: reqId,
-            prompt: `Message to evaluate: "${text}"`,
-            config: {
-                instruction: "You are a real-time chat moderator. Check if the message contains toxic insults, explicit hate speech, or harassment. If it is safe, reply with only the word APPROVED. If it is toxic, offensive or unsafe, reply with only the word REJECTED. Do not write anything else.",
-                temp: 0.1,
-                tokens: 10,
-                stream: false
+    function updateServerList() {
+        const listDiv = document.getElementById('server-list');
+        listDiv.innerHTML = "";
+        activeRooms.forEach(room => {
+            const item = document.createElement('div');
+            item.className = 'server-item';
+            item.innerText = `ROOM [ ${room} ]`;
+            item.onclick = () => tryJoinRoom(room);
+            listDiv.appendChild(item);
+        });
+    }
+
+    function tryJoinRoom(room) {
+        const pass = prompt("Digite o código da sala de 4 letras:");
+        if (pass && pass.toUpperCase() === room) {
+            myRoom = room;
+            startClientView();
+        } else {
+            alert("Código incorreto!");
+        }
+    }
+
+    function startClientView() {
+        document.getElementById('screen-join').style.display = 'none';
+        
+        const viewport = document.getElementById('viewport');
+        viewport.style.display = 'flex';
+
+        if (deviceSelected === 'mobile') {
+            document.getElementById('mobile-keyboard').style.display = 'grid';
+            setupMobileDrivers();
+        } else {
+            setupPCDrivers();
+        }
+    }
+
+    // --- CONTROLES DE INPUT (DRIVER PC) ---
+    function setupPCDrivers() {
+        const screen = document.getElementById('remote-screen');
+        
+        // Pointer Lock & Fullscreen
+        screen.addEventListener('click', () => {
+            document.documentElement.requestFullscreen().catch(()=>{});
+            screen.requestPointerLock();
+        });
+
+        // Movimento relativo no PointerLock
+        document.addEventListener('mousemove', (e) => {
+            if (document.pointerLockElement === screen) {
+                // Como o pointer lock está ativo, enviamos de forma incremental aproximada
+                const rect = screen.getBoundingClientRect();
+                // Simulação matemática de coordenadas relativas
+                const x = Math.min(Math.max(0, (e.movementX + rect.width/2) / rect.width), 1);
+                const y = Math.min(Math.max(0, (e.movementY + rect.height/2) / rect.height), 1);
+                
+                socket.emit('RemoteEvent', {
+                    type: 'remote_input', room: myRoom, action: 'mousemove', x, y
+                });
             }
         });
 
-        input.value = "";
+        // Cliques
+        screen.addEventListener('mousedown', (e) => {
+            if (document.pointerLockElement === screen) {
+                const btn = e.button === 2 ? 'right' : 'left';
+                socket.emit('RemoteEvent', { type: 'remote_input', room: myRoom, action: 'mousedown', btn });
+            }
+        });
+
+        screen.addEventListener('mouseup', (e) => {
+            if (document.pointerLockElement === screen) {
+                const btn = e.button === 2 ? 'right' : 'left';
+                socket.emit('RemoteEvent', { type: 'remote_input', room: myRoom, action: 'mouseup', btn });
+            }
+        });
+
+        screen.addEventListener('contextmenu', e => e.preventDefault());
+
+        // Teclado Físico
+        window.addEventListener('keydown', (e) => {
+            if (document.pointerLockElement === screen) {
+                if (!e.repeat) {
+                    socket.emit('RemoteEvent', { type: 'remote_input', room: myRoom, action: 'keydown', key: e.key });
+                }
+                e.preventDefault();
+            }
+            
+            // Lógica de Saída rápida (Double Escape)
+            if (e.key === 'Escape') {
+                escCount++;
+                clearTimeout(escTimer);
+                if (escCount >= 2) {
+                    location.reload(); // Sai do Viewer
+                } else {
+                    escTimer = setTimeout(() => { escCount = 0; }, 1000);
+                }
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (document.pointerLockElement === screen) {
+                socket.emit('RemoteEvent', { type: 'remote_input', room: myRoom, action: 'keyup', key: e.key });
+                e.preventDefault();
+            }
+        });
     }
 
-    function appendMessage(user, text, isMe, isPending) {
-        const div = document.createElement('div');
-        div.className = `msg ${isMe ? 'me' : 'other'} ${isPending ? 'pending' : ''}`;
-        
-        div.innerHTML = `
-            <div class="username">${user}</div>
-            <div class="text-content">${text}</div>
-            ${isPending ? '<span class="status-tag">⏳ Moderando...</span>' : ''}
-        `;
-        
-        log.appendChild(div);
-        log.scrollTop = log.scrollHeight;
-        return div;
+    // --- CONTROLES DE INPUT (DRIVER MOBILE) ---
+    function setupMobileDrivers() {
+        const screen = document.getElementById('remote-screen');
+        let lastTap = 0;
+        let isDragging = false;
+
+        screen.addEventListener('touchmove', (e) => {
+            isDragging = true;
+            const touch = e.touches[0];
+            const rect = screen.getBoundingClientRect();
+            const x = Math.min(Math.max(0, (touch.clientX - rect.left) / rect.width), 1);
+            const y = Math.min(Math.max(0, (touch.clientY - rect.top) / rect.height), 1);
+            
+            socket.emit('RemoteEvent', {
+                type: 'remote_input', room: myRoom, action: 'mousemove', x, y
+            });
+        });
+
+        screen.addEventListener('touchend', (e) => {
+            if (!isDragging) {
+                const now = Date.now();
+                const diff = now - lastTap;
+                
+                if (diff < 300 && diff > 0) {
+                    // Double Tap = Clique Direito
+                    socket.emit('RemoteEvent', { type: 'remote_input', room: myRoom, action: 'mousedown', btn: 'right' });
+                    setTimeout(() => socket.emit('RemoteEvent', { type: 'remote_input', room: myRoom, action: 'mouseup', btn: 'right' }), 50);
+                } else {
+                    // Single Tap = Clique Esquerdo
+                    socket.emit('RemoteEvent', { type: 'remote_input', room: myRoom, action: 'mousedown', btn: 'left' });
+                    setTimeout(() => socket.emit('RemoteEvent', { type: 'remote_input', room: myRoom, action: 'mouseup', btn: 'left' }), 50);
+                }
+                lastTap = now;
+            }
+            isDragging = false;
+        });
     }
 
-    // Tecla Enter para enviar
-    input.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleAction();
-    });
+    function sendKey(k, state) {
+        socket.emit('RemoteEvent', {
+            type: 'remote_input', room: myRoom, action: state === 'down' ? 'keydown' : 'keyup', key: k
+        });
+    }
 </script>
 </body>
 </html>
