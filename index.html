@@ -142,6 +142,7 @@
     </div>
 
 <script>
+    // --- CREDENCIAIS ENVIADAS ---
     const TUNNEL = "https://advertising-born-increase-allowing.trycloudflare.com";
     const AUTH_KEY = "3mg40B4X8";
     const socket = io(TUNNEL, { auth: { token: AUTH_KEY }, transports: ['websocket'] });
@@ -155,16 +156,13 @@
     let escCount = 0;
     let escTimer = null;
 
-    // Throttle do controlador para limitar a 20 requisições por segundo
+    // Rate limits
     let lastMoveTime = 0;
-
-    // NOVO: Controle de fluxo de frames (Anti-Congestionamento)
-    let canSendFrame = true;
+    let readyForNextFrame = true; // Flag do controle de fluxo (VAD de rede)
 
     // --- MENU CONTROLS ---
     function setDevice(device) {
         deviceSelected = device;
-        document.getElementById('setup').style.display = 'none';
         document.getElementById('screen-device').style.display = 'none';
         document.getElementById('screen-action').style.display = 'flex';
     }
@@ -198,16 +196,15 @@
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
 
-            // Intervalo de captura de frames (~15 FPS)
+            // Envia quadros apenas sob demanda (quando o cliente confirmar renderização)
             setInterval(() => {
-                // SÓ envia o frame se o cliente já tiver processado e respondido o anterior!
-                if (video.readyState === video.HAVE_ENOUGH_DATA && canSendFrame) {
-                    canvas.width = 854; 
+                if (video.readyState === video.HAVE_ENOUGH_DATA && readyForNextFrame) {
+                    canvas.width = 854;
                     canvas.height = 480;
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                     
-                    // Bloqueia novos frames temporariamente
-                    canSendFrame = false;
+                    // Bloqueia envios adicionais até que o cliente receba este quadro
+                    readyForNextFrame = false; 
 
                     socket.emit('RemoteEvent', {
                         type: 'screen_frame',
@@ -232,17 +229,16 @@
         activeRooms.clear();
         document.getElementById('server-list').innerHTML = `<div style="padding:15px; color:#666; font-size:0.8rem;">Searching rooms...</div>`;
         
-        // Dispara um ping para descobrir salas ativas
         socket.emit('RemoteEvent', { type: 'room_ping' });
     }
 
     socket.on('RemoteEvent', (packet) => {
-        // Responder pings de salas se eu for o Host ativo
+        // Responder pings de descoberta se for o Host
         if (packet.type === 'room_ping' && isHostActive) {
             socket.emit('RemoteEvent', { type: 'room_pong', room: myRoom });
         }
 
-        // Adicionar sala descoberta à lista
+        // Adicionar sala descoberta
         if (packet.type === 'room_pong' && !isHostActive) {
             if (!activeRooms.has(packet.room)) {
                 activeRooms.add(packet.room);
@@ -250,24 +246,22 @@
             }
         }
 
-        // NOVO: Se eu sou o Host e recebi um "ACK", libero o envio do próximo frame
-        if (packet.type === 'frame_ack' && packet.room === myRoom && isHostActive) {
-            canSendFrame = true;
-        }
-
-        // Renderizar frame recebido no cliente
+        // Cliente recebeu o quadro do Host
         if (packet.type === 'screen_frame' && packet.room === myRoom && !isHostActive) {
             const screenImg = document.getElementById('remote-screen');
             
-            // Quando a imagem terminar de carregar na tela do cliente, enviamos o ACK
+            // Quando a imagem terminar de carregar fisicamente na tela do amigo
             screenImg.onload = () => {
-                socket.emit('RemoteEvent', {
-                    type: 'frame_ack',
-                    room: myRoom
-                });
+                // Devolve o sinal de liberação (Ack) para o Host enviar o próximo
+                socket.emit('RemoteEvent', { type: 'frame_ack', room: myRoom });
             };
             
             screenImg.src = packet.img;
+        }
+
+        // Host recebe a liberação do Cliente
+        if (packet.type === 'frame_ack' && packet.room === myRoom && isHostActive) {
+            readyForNextFrame = true; // Libera captura do próximo quadro
         }
     });
 
@@ -307,14 +301,14 @@
         }
     }
 
-    // --- INPUT SENDER COM LIMITADOR DE 20 REQS/S ---
+    // --- INPUT SENDER ---
     function sendInput(action, data) {
         if (isHostActive) return;
 
-        // Rate limiter estrito de 20 requisições/s (intervalo de 50ms) aplicado apenas a movimentos de mouse
+        // Limita atualizações de arraste do mouse a no máximo 20 Hz
         if (action === 'mousemove') {
             const now = Date.now();
-            if (now - lastMoveTime < 50) return; // Ignora se o intervalo for menor que 50ms
+            if (now - lastMoveTime < 50) return;
             lastMoveTime = now;
         }
 
@@ -326,28 +320,24 @@
         sendInput(state === 'down' ? 'keydown' : 'keyup', { key: k });
     }
 
-    // --- CONTROLES DE INPUT (DRIVER PC) ---
+    // --- PC DRIVERS ---
     function setupPCDrivers() {
         const screen = document.getElementById('remote-screen');
         
-        // Pointer Lock & Fullscreen
         screen.addEventListener('click', () => {
             document.documentElement.requestFullscreen().catch(()=>{});
             screen.requestPointerLock();
         });
 
-        // Movimento relativo no PointerLock
         document.addEventListener('mousemove', (e) => {
             if (document.pointerLockElement === screen) {
                 const rect = screen.getBoundingClientRect();
                 const x = Math.min(Math.max(0, (e.movementX + rect.width/2) / rect.width), 1);
                 const y = Math.min(Math.max(0, (e.movementY + rect.height/2) / rect.height), 1);
-                
                 sendInput('mousemove', { x, y });
             }
         });
 
-        // Cliques
         screen.addEventListener('mousedown', (e) => {
             if (document.pointerLockElement === screen) {
                 const btn = e.button === 2 ? 'right' : 'left';
@@ -364,21 +354,17 @@
 
         screen.addEventListener('contextmenu', e => e.preventDefault());
 
-        // Teclado Físico
         window.addEventListener('keydown', (e) => {
             if (document.pointerLockElement === screen) {
-                if (!e.repeat) {
-                    sendInput('keydown', { key: e.key });
-                }
+                if (!e.repeat) sendInput('keydown', { key: e.key });
                 e.preventDefault();
             }
             
-            // Lógica de Saída rápida (Double Escape)
             if (e.key === 'Escape') {
                 escCount++;
                 clearTimeout(escTimer);
                 if (escCount >= 2) {
-                    location.reload(); // Sai do Viewer
+                    location.reload();
                 } else {
                     escTimer = setTimeout(() => { escCount = 0; }, 1000);
                 }
@@ -393,7 +379,7 @@
         });
     }
 
-    // --- CONTROLES DE INPUT (DRIVER MOBILE) ---
+    // --- MOBILE DRIVERS ---
     function setupMobileDrivers() {
         const screen = document.getElementById('remote-screen');
         let lastTap = 0;
@@ -405,7 +391,6 @@
             const rect = screen.getBoundingClientRect();
             const x = Math.min(Math.max(0, (touch.clientX - rect.left) / rect.width), 1);
             const y = Math.min(Math.max(0, (touch.clientY - rect.top) / rect.height), 1);
-            
             sendInput('mousemove', { x, y });
         });
 
@@ -415,11 +400,9 @@
                 const diff = now - lastTap;
                 
                 if (diff < 300 && diff > 0) {
-                    // Double Tap = Clique Direito
                     sendInput('mousedown', { btn: 'right' });
                     setTimeout(() => sendInput('mouseup', { btn: 'right' }), 50);
                 } else {
-                    // Single Tap = Clique Esquerdo
                     sendInput('mousedown', { btn: 'left' });
                     setTimeout(() => sendInput('mouseup', { btn: 'left' }), 50);
                 }
