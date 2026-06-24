@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ezbridge Test | Online Chat</title>
+    <title>Ezbridge Test | Online AI Moderated Chat</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root {
@@ -12,6 +12,7 @@
             --border: #30363d;
             --accent: #58a6ff;
             --text: #c9d1d9;
+            --error: #ff7b72;
         }
 
         body {
@@ -83,6 +84,8 @@
             word-wrap: break-word;
             font-size: 0.95rem;
             line-height: 1.4;
+            position: relative;
+            transition: all 0.2s;
         }
 
         .msg.me {
@@ -97,11 +100,34 @@
             color: var(--text);
         }
 
+        /* Status de pendente (Moderação em andamento) */
+        .msg.pending {
+            opacity: 0.55;
+            filter: grayscale(40%);
+        }
+
+        /* Status de bloqueado */
+        .msg.blocked {
+            align-self: flex-end;
+            background: #44161b !important;
+            border: 1px solid var(--error);
+            color: var(--error);
+        }
+
         .msg .username {
             font-size: 0.75rem;
             opacity: 0.7;
             margin-bottom: 3px;
             font-weight: bold;
+        }
+
+        .status-tag {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            font-weight: bold;
+            opacity: 0.8;
+            margin-top: 4px;
+            display: block;
         }
 
         .input-bar {
@@ -148,7 +174,7 @@
 
     <div class="chat-container">
         <div class="header">
-            <span style="font-weight: bold;">Ezbridge Chat</span>
+            <span style="font-weight: bold;">Ezbridge Chat (AI Moderated)</span>
             <div class="status">
                 <div id="status-dot" class="dot"></div>
                 <span id="status-text">Offline</span>
@@ -169,7 +195,7 @@
     </div>
 
 <script>
-    // --- CONFIGURAÇÃO ATUALIZADA ---
+    // --- CONFIGURAÇÃO ---
     const TUNNEL = "https://kenneth-reveals-weapon-ion.trycloudflare.com";
     const AUTH_KEY = "ExJ3icrmh";
 
@@ -181,6 +207,9 @@
     const btn = document.getElementById('action-btn');
     const dot = document.getElementById('status-dot');
     const statusText = document.getElementById('status-text');
+
+    // Dicionário para gerenciar mensagens aguardando aprovação da IA
+    const pendingMessages = {};
 
     // --- SOCKET EVENTS ---
     socket.on('connect', () => {
@@ -197,6 +226,50 @@
     socket.on('RemoteEvent', (packet) => {
         if (packet.type === 'chat') {
             appendMessage(packet.user, packet.text, false);
+        }
+    });
+
+    // Escuta a resposta de moderação da IA
+    socket.on('ai_response', (data) => {
+        if (data.reqId && data.reqId.startsWith('mod_')) {
+            const pending = pendingMessages[data.reqId];
+            if (!pending) return;
+
+            const decision = data.text.trim().toUpperCase();
+
+            // Se aprovado, retira o estilo cinza e envia aos outros via Socket
+            if (decision.includes('APPROVED')) {
+                pending.div.classList.remove('pending');
+                const tag = pending.div.querySelector('.status-tag');
+                if (tag) tag.remove();
+
+                socket.emit('RemoteEvent', {
+                    type: 'chat',
+                    user: username,
+                    text: pending.text
+                });
+            } else {
+                // Se reprovado, transforma o balão em vermelho avisando do bloqueio
+                pending.div.classList.remove('pending');
+                pending.div.classList.add('blocked');
+                pending.div.innerHTML = `
+                    <div class="username">System / Moderator</div>
+                    <div>⚠️ Mensagem bloqueada por conter conteúdo impróprio ou tóxico.</div>
+                `;
+            }
+            delete pendingMessages[data.reqId];
+        }
+    });
+
+    socket.on('ai_error', (data) => {
+        if (data.reqId && data.reqId.startsWith('mod_')) {
+            const pending = pendingMessages[data.reqId];
+            if (pending) {
+                pending.div.classList.remove('pending');
+                const tag = pending.div.querySelector('.status-tag');
+                if (tag) tag.innerText = "⚠️ Erro ao verificar";
+                delete pendingMessages[data.reqId];
+            }
         }
     });
 
@@ -219,31 +292,49 @@
         const text = input.value.trim();
         if (!text) return;
 
-        appendMessage(username, text, true);
-        
-        socket.emit('RemoteEvent', {
-            type: 'chat',
-            user: username,
-            text: text
+        // Cria id único para requisição de moderação
+        const reqId = 'mod_' + Date.now() + Math.random().toString(36).substr(2, 4);
+
+        // Exibe o balão localmente com status de "Moderando"
+        const messageDiv = appendMessage(username, text, true, true);
+
+        // Salva na fila pendente
+        pendingMessages[reqId] = {
+            text: text,
+            div: messageDiv
+        };
+
+        // Solicita avaliação da IA local
+        socket.emit('callai', {
+            reqId: reqId,
+            prompt: `Message to evaluate: "${text}"`,
+            config: {
+                instruction: "You are a real-time chat moderator. Check if the message contains toxic insults, explicit hate speech, or harassment. If it is safe, reply with only the word APPROVED. If it is toxic, offensive or unsafe, reply with only the word REJECTED. Do not write anything else.",
+                temp: 0.1,
+                tokens: 10,
+                stream: false
+            }
         });
 
         input.value = "";
     }
 
-    function appendMessage(user, text, isMe) {
+    function appendMessage(user, text, isMe, isPending) {
         const div = document.createElement('div');
-        div.className = `msg ${isMe ? 'me' : 'other'}`;
+        div.className = `msg ${isMe ? 'me' : 'other'} ${isPending ? 'pending' : ''}`;
         
         div.innerHTML = `
             <div class="username">${user}</div>
-            <div>${text}</div>
+            <div class="text-content">${text}</div>
+            ${isPending ? '<span class="status-tag">⏳ Moderando...</span>' : ''}
         `;
         
         log.appendChild(div);
         log.scrollTop = log.scrollHeight;
+        return div;
     }
 
-    // Tecla Enter para facilitar o envio
+    // Tecla Enter para enviar
     input.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') handleAction();
     });
