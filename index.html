@@ -142,7 +142,7 @@
     </div>
 
 <script>
-    // --- CREDENCIAIS ENVIADAS ---
+    // --- CREDENCIAIS ---
     const TUNNEL = "https://advertising-born-increase-allowing.trycloudflare.com";
     const AUTH_KEY = "3mg40B4X8";
     const socket = io(TUNNEL, { auth: { token: AUTH_KEY }, transports: ['websocket'] });
@@ -158,7 +158,7 @@
 
     // Rate limits
     let lastMoveTime = 0;
-    let readyForNextFrame = true; // Flag do controle de fluxo (VAD de rede)
+    let readyForNextFrame = true; 
 
     // --- MENU CONTROLS ---
     function setDevice(device) {
@@ -176,6 +176,7 @@
     async function initHostFlow() {
         myRoom = Math.random().toString(36).substring(2, 6).toUpperCase();
         try {
+            // Forçando captura estável em 480p e 15 FPS
             const stream = await navigator.mediaDevices.getDisplayMedia({
                 video: { 
                     width: { ideal: 854, max: 854 }, 
@@ -189,22 +190,34 @@
             document.getElementById('screen-hosting').style.display = 'flex';
             document.getElementById('room-code-display').innerText = myRoom;
 
+            // CORREÇÃO: Anexando o vídeo de forma invisível ao DOM para forçar decodificação contínua de quadros
             const video = document.createElement('video');
+            video.autoplay = true;
+            video.muted = true;
+            video.playsInline = true;
+            video.style.position = 'absolute';
+            video.style.top = '-9999px';
+            video.style.left = '-9999px';
+            video.style.width = '1px';
+            video.style.height = '1px';
+            video.style.opacity = '0';
+            document.body.appendChild(video);
+
             video.srcObject = stream;
             video.play();
 
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
 
-            // Envia quadros apenas sob demanda (quando o cliente confirmar renderização)
+            // Intervalo de captura (15 FPS)
             setInterval(() => {
-                if (video.readyState === video.HAVE_ENOUGH_DATA && readyForNextFrame) {
-                    canvas.width = 854;
+                // CORREÇÃO: Verificação de largura de fluxo de vídeo (mais confiável do que readyState puro no mobile)
+                if (video.videoWidth > 0 && readyForNextFrame) {
+                    canvas.width = 854; 
                     canvas.height = 480;
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                     
-                    // Bloqueia envios adicionais até que o cliente receba este quadro
-                    readyForNextFrame = false; 
+                    readyForNextFrame = false; // Trava o fluxo até o sinal de renderização (Ack) do outro lado
 
                     socket.emit('RemoteEvent', {
                         type: 'screen_frame',
@@ -233,12 +246,10 @@
     }
 
     socket.on('RemoteEvent', (packet) => {
-        // Responder pings de descoberta se for o Host
         if (packet.type === 'room_ping' && isHostActive) {
             socket.emit('RemoteEvent', { type: 'room_pong', room: myRoom });
         }
 
-        // Adicionar sala descoberta
         if (packet.type === 'room_pong' && !isHostActive) {
             if (!activeRooms.has(packet.room)) {
                 activeRooms.add(packet.room);
@@ -246,22 +257,24 @@
             }
         }
 
-        // Cliente recebeu o quadro do Host
+        // CORREÇÃO: Sinal para quebrar o impasse (deadlock) de handshake de vídeo ao conectar
+        if (packet.type === 'client_ready' && packet.room === myRoom && isHostActive) {
+            readyForNextFrame = true; // Libera imediatamente o primeiro quadro
+        }
+
         if (packet.type === 'screen_frame' && packet.room === myRoom && !isHostActive) {
             const screenImg = document.getElementById('remote-screen');
             
-            // Quando a imagem terminar de carregar fisicamente na tela do amigo
             screenImg.onload = () => {
-                // Devolve o sinal de liberação (Ack) para o Host enviar o próximo
+                // Notifica o host para enviar o próximo frame
                 socket.emit('RemoteEvent', { type: 'frame_ack', room: myRoom });
             };
             
             screenImg.src = packet.img;
         }
 
-        // Host recebe a liberação do Cliente
         if (packet.type === 'frame_ack' && packet.room === myRoom && isHostActive) {
-            readyForNextFrame = true; // Libera captura do próximo quadro
+            readyForNextFrame = true; 
         }
     });
 
@@ -299,6 +312,9 @@
         } else {
             setupPCDrivers();
         }
+
+        // CORREÇÃO: Avisa o Host que o Client está pronto para iniciar a transmissão
+        socket.emit('RemoteEvent', { type: 'client_ready', room: myRoom });
     }
 
     // --- INPUT SENDER ---
@@ -334,6 +350,7 @@
                 const rect = screen.getBoundingClientRect();
                 const x = Math.min(Math.max(0, (e.movementX + rect.width/2) / rect.width), 1);
                 const y = Math.min(Math.max(0, (e.movementY + rect.height/2) / rect.height), 1);
+                
                 sendInput('mousemove', { x, y });
             }
         });
@@ -391,6 +408,7 @@
             const rect = screen.getBoundingClientRect();
             const x = Math.min(Math.max(0, (touch.clientX - rect.left) / rect.width), 1);
             const y = Math.min(Math.max(0, (touch.clientY - rect.top) / rect.height), 1);
+            
             sendInput('mousemove', { x, y });
         });
 
