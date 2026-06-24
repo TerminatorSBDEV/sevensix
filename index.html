@@ -158,9 +158,13 @@
     // Throttle do controlador para limitar a 20 requisições por segundo
     let lastMoveTime = 0;
 
+    // NOVO: Controle de fluxo de frames (Anti-Congestionamento)
+    let canSendFrame = true;
+
     // --- MENU CONTROLS ---
     function setDevice(device) {
         deviceSelected = device;
+        document.getElementById('setup').style.display = 'none';
         document.getElementById('screen-device').style.display = 'none';
         document.getElementById('screen-action').style.display = 'flex';
     }
@@ -174,7 +178,6 @@
     async function initHostFlow() {
         myRoom = Math.random().toString(36).substring(2, 6).toUpperCase();
         try {
-            // ATUALIZADO: Forçando captura em 480p e 15 FPS
             const stream = await navigator.mediaDevices.getDisplayMedia({
                 video: { 
                     width: { ideal: 854, max: 854 }, 
@@ -195,13 +198,17 @@
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
 
-            // ATUALIZADO: Intervalo estrito de 66.6ms (~15 FPS)
+            // Intervalo de captura de frames (~15 FPS)
             setInterval(() => {
-                if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                    canvas.width = 854; // Forçando dimensões de 480p
+                // SÓ envia o frame se o cliente já tiver processado e respondido o anterior!
+                if (video.readyState === video.HAVE_ENOUGH_DATA && canSendFrame) {
+                    canvas.width = 854; 
                     canvas.height = 480;
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                     
+                    // Bloqueia novos frames temporariamente
+                    canSendFrame = false;
+
                     socket.emit('RemoteEvent', {
                         type: 'screen_frame',
                         room: myRoom,
@@ -243,9 +250,24 @@
             }
         }
 
+        // NOVO: Se eu sou o Host e recebi um "ACK", libero o envio do próximo frame
+        if (packet.type === 'frame_ack' && packet.room === myRoom && isHostActive) {
+            canSendFrame = true;
+        }
+
         // Renderizar frame recebido no cliente
         if (packet.type === 'screen_frame' && packet.room === myRoom && !isHostActive) {
-            document.getElementById('remote-screen').src = packet.img;
+            const screenImg = document.getElementById('remote-screen');
+            
+            // Quando a imagem terminar de carregar na tela do cliente, enviamos o ACK
+            screenImg.onload = () => {
+                socket.emit('RemoteEvent', {
+                    type: 'frame_ack',
+                    room: myRoom
+                });
+            };
+            
+            screenImg.src = packet.img;
         }
     });
 
@@ -289,7 +311,7 @@
     function sendInput(action, data) {
         if (isHostActive) return;
 
-        // ATUALIZADO: Rate limiter estrito de 20 requisições/s (intervalo de 50ms) aplicado apenas a movimentos de mouse
+        // Rate limiter estrito de 20 requisições/s (intervalo de 50ms) aplicado apenas a movimentos de mouse
         if (action === 'mousemove') {
             const now = Date.now();
             if (now - lastMoveTime < 50) return; // Ignora se o intervalo for menor que 50ms
