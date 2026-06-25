@@ -42,6 +42,15 @@
         .btn-secondary { background: #222; color: #fff; border: 1px solid var(--border); }
         .btn-secondary:hover { background: #333; }
 
+        /* Configuração de Transmissão */
+        .setup-group {
+            text-align: left; margin: 15px 0; display: flex; flex-direction: column; gap: 5px;
+        }
+        .setup-group label { font-size: 0.8rem; color: #888; text-transform: uppercase; font-weight: bold; }
+        .setup-group select, .setup-group input {
+            background: #000; border: 1px solid var(--border); color: white; padding: 10px; border-radius: 6px; outline: none;
+        }
+
         /* Lista de Servidores Descobertos */
         .server-list {
             margin-top: 15px; max-height: 150px; overflow-y: auto;
@@ -62,7 +71,7 @@
 
         #remote-screen {
             max-width: 100%; max-height: 100%; object-fit: contain;
-            cursor: none; /* Oculta cursor real para ver o do Host */
+            cursor: none; 
         }
 
         /* Teclado Virtual Mobile */
@@ -95,8 +104,31 @@
     <div id="screen-action" class="screen" style="display:none;">
         <div class="box">
             <h2 style="margin-top:0; color: var(--accent);">Whatchu wanna do?</h2>
-            <button class="btn" onclick="initHostFlow()">Create Room</button>
+            <button class="btn" onclick="openHostSetup()">Create Room</button>
             <button class="btn btn-secondary" onclick="openJoinMenu()">Join a Room</button>
+        </div>
+    </div>
+
+    <!-- Passo 2.5: Configuração de Transmissão (Antes de criar a sala) -->
+    <div id="screen-host-setup" class="screen" style="display:none;">
+        <div class="box">
+            <h3 style="margin-top:0; color: var(--accent);">Stream Setup</h3>
+            <div class="setup-group">
+                <label>Resolution</label>
+                <select id="stream-quality">
+                    <option value="720p">720p (1280x720)</option>
+                    <option value="480p" selected>480p (854x480)</option>
+                    <option value="360p">360p (640x360)</option>
+                    <option value="240p">240p (426x240)</option>
+                    <option value="144p">144p (256x144)</option>
+                </select>
+            </div>
+            <div class="setup-group">
+                <label>Frame Rate (FPS)</label>
+                <input type="number" id="stream-fps" value="15" min="1" max="30">
+            </div>
+            <button class="btn" onclick="initHostFlow()">Share Screen & Start</button>
+            <button class="btn btn-secondary" onclick="goBackToActionsFromSetup()">Cancel</button>
         </div>
     </div>
 
@@ -142,7 +174,7 @@
     </div>
 
 <script>
-    // --- CREDENCIAIS ATUALIZADAS ---
+    // --- CREDENCIAIS ---
     const TUNNEL = "https://auburn-november-shortly-log.trycloudflare.com";
     const AUTH_KEY = "eS21DOtld";
     const socket = io(TUNNEL, { auth: { token: AUTH_KEY }, transports: ['websocket'] });
@@ -152,7 +184,6 @@
     let isHostActive = false;
     let activeRooms = new Set();
     
-    // Identidade local temporária para o cursor virtual
     const myId = "usr_" + Math.random().toString(36).substr(2, 5);
     const guestColor = getRandomNeonColor();
 
@@ -164,6 +195,19 @@
     let lastFrameUrl = null;
     let frameCount = 0;
     let heartbeatInterval = null;
+
+    // Configuração Dinâmica da Stream
+    let selectedQuality = "480p";
+    let selectedFPS = 15;
+    let bgWorker = null; // Ticker de segundo plano que evita throttling
+
+    const qualityResolutionMap = {
+        "720p": { w: 1280, h: 720 },
+        "480p": { w: 854, h: 480 },
+        "360p": { w: 640, h: 360 },
+        "240p": { w: 426, h: 240 },
+        "144p": { w: 256, h: 144 }
+    };
 
     // Helper para converter base64 para binário Blob nativo
     function dataURItoBlob(dataURI) {
@@ -189,25 +233,65 @@
         document.getElementById('screen-action').style.display = 'flex';
     }
 
+    function openJoinMenu() {
+        document.getElementById('screen-action').style.display = 'none';
+        document.getElementById('screen-join').style.display = 'flex';
+        activeRooms.clear();
+        document.getElementById('server-list').innerHTML = `<div style="padding:15px; color:#666; font-size:0.8rem;">Searching rooms...</div>`;
+        socket.emit('RemoteEvent', { type: 'room_ping' });
+    }
+
     function goBackToActions() {
         document.getElementById('screen-join').style.display = 'none';
         document.getElementById('screen-action').style.display = 'flex';
     }
 
-    // --- HOST FLOW ---
+    function openSettings() {
+        document.getElementById('settings-modal').style.display = 'flex';
+    }
+
+    function openChatSettings() {
+        document.getElementById('chat-settings').style.display = 'block';
+    }
+
+    function toggleChatSettings() {
+        const s = document.getElementById('chat-settings');
+        s.style.display = s.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function toggleChat() {
+        const panel = document.getElementById('chat-panel');
+        panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex';
+    }
+
+    function openHostSetup() {
+        document.getElementById('screen-action').style.display = 'none';
+        document.getElementById('screen-host-setup').style.display = 'flex';
+    }
+
+    function goBackToActionsFromSetup() {
+        document.getElementById('screen-host-setup').style.display = 'none';
+        document.getElementById('screen-action').style.display = 'flex';
+    }
+
+    // --- HOST FLOW & WEB WORKER TICKER (SOLUÇÃO DE 1 FPS EM SEGUNDO PLANO) ---
     async function initHostFlow() {
+        selectedQuality = document.getElementById('stream-quality').value;
+        selectedFPS = Math.min(Math.max(1, parseInt(document.getElementById('stream-fps').value) || 15), 30);
+        const res = qualityResolutionMap[selectedQuality];
+
         myRoom = Math.random().toString(36).substring(2, 6).toUpperCase();
         try {
             const stream = await navigator.mediaDevices.getDisplayMedia({
                 video: { 
-                    width: { ideal: 854, max: 854 }, 
-                    height: { ideal: 480, max: 480 }, 
-                    frameRate: { ideal: 15, max: 15 } 
+                    width: { ideal: res.w, max: res.w }, 
+                    height: { ideal: res.h, max: res.h }, 
+                    frameRate: { ideal: selectedFPS, max: selectedFPS } 
                 }
             });
             
             isHostActive = true;
-            document.getElementById('screen-action').style.display = 'none';
+            document.getElementById('screen-host-setup').style.display = 'none';
             document.getElementById('screen-hosting').style.display = 'flex';
             document.getElementById('room-code-display').innerText = myRoom;
 
@@ -218,10 +302,10 @@
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
 
-            setInterval(() => {
+            function captureAndSend() {
                 if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                    canvas.width = 854; 
-                    canvas.height = 480;
+                    canvas.width = res.w; 
+                    canvas.height = res.h;
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                     
                     socket.emit('RemoteEvent', {
@@ -230,25 +314,43 @@
                         img: canvas.toDataURL('image/jpeg', 0.45)
                     });
                 }
-            }, 1000 / 15);
+            }
 
-            stream.getVideoTracks()[0].onended = () => location.reload();
+            // --- INLINE WEB WORKER (Garante envio fluido mesmo com a aba em segundo plano) ---
+            const workerCode = `
+                let timer = null;
+                self.onmessage = function(e) {
+                    if (e.data.cmd === 'start') {
+                        clearInterval(timer);
+                        timer = setInterval(() => {
+                            self.postMessage('tick');
+                        }, e.data.interval);
+                    } else if (e.data.cmd === 'stop') {
+                        clearInterval(timer);
+                    }
+                };
+            `;
+            const workerBlob = new Blob([workerCode], {type: 'application/javascript'});
+            bgWorker = new Worker(URL.createObjectURL(workerBlob));
+            
+            bgWorker.onmessage = function() {
+                captureAndSend();
+            };
+
+            // Inicia o metrônomo de tempo baseado no FPS selecionado
+            bgWorker.postMessage({ cmd: 'start', interval: 1000 / selectedFPS });
+
+            stream.getVideoTracks()[0].onended = () => {
+                if (bgWorker) bgWorker.postMessage({ cmd: 'stop' });
+                location.reload();
+            };
 
         } catch (e) {
             alert("Screenshare error: " + e.message);
         }
     }
 
-    // --- DISCOVERY & JOIN FLOW ---
-    function openJoinMenu() {
-        document.getElementById('screen-action').style.display = 'none';
-        document.getElementById('screen-join').style.display = 'flex';
-        
-        activeRooms.clear();
-        document.getElementById('server-list').innerHTML = `<div style="padding:15px; color:#666; font-size:0.8rem;">Searching rooms...</div>`;
-        socket.emit('RemoteEvent', { type: 'room_ping' });
-    }
-
+    // --- CLIENT RECEIVER WITH FLUSH SYSTEM ---
     socket.on('RemoteEvent', (packet) => {
         if (packet.type === 'room_ping' && isHostActive) {
             socket.emit('RemoteEvent', { type: 'room_pong', room: myRoom });
@@ -261,11 +363,11 @@
             }
         }
 
-        // Renderizar frame recebido no cliente aplicando Garbage Collection forçado
+        // Renderização livre de vazamento de memória (Memory Flush a cada frame + Refresh a cada 5)
         if (packet.type === 'screen_frame' && packet.room === myRoom && !isHostActive) {
             const imgElement = document.getElementById('remote-screen');
             
-            // Revoga a URL anterior imediatamente para limpar cache e RAM do navegador
+            // Revoga a URL do objeto anterior imediatamente para liberar a memória física do navegador
             if (lastFrameUrl) {
                 URL.revokeObjectURL(lastFrameUrl);
             }
@@ -276,7 +378,7 @@
             imgElement.src = objectUrl;
             lastFrameUrl = objectUrl;
 
-            // Tratamento extra: a cada 5 frames força um reflow visual limpando memória do DOM
+            // Limpa o cache visual forçando um reflow visual interno
             frameCount++;
             if (frameCount % 5 === 0) {
                 imgElement.style.display = 'none';
@@ -292,7 +394,6 @@
         heartbeatInterval = setInterval(() => {
             if (isHostActive || !myRoom) return;
             
-            // Envia batimento cardíaco identificando apelido e cor do cursor
             socket.emit('RemoteEvent', {
                 type: 'remote_input',
                 action: 'heartbeat',
@@ -301,7 +402,7 @@
                 name: 'guest_1',
                 color: guestColor
             });
-        }, 3000); // Batimento a cada 3 segundos
+        }, 3000); 
     }
 
     function updateServerList() {
@@ -341,7 +442,7 @@
         }
     }
 
-    // --- ENVIADOR COM LIMITADOR DE 20 REQS/S ---
+    // --- INPUT SENDER COM LIMITADOR DE 20 REQS/S ---
     function sendInput(action, data) {
         if (isHostActive) return;
 
