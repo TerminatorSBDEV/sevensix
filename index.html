@@ -111,7 +111,7 @@
         </div>
     </div>
 
-    <!-- Tela do Host Ativo (Gerando Link) -->
+    <!-- Tela do Host Ativo -->
     <div id="screen-hosting" class="screen" style="display:none;">
         <div class="box">
             <h2 style="color: var(--accent);">ROOM CREATED</h2>
@@ -142,7 +142,7 @@
     </div>
 
 <script>
-    // --- CREDENCIAIS ---
+    // --- CREDENCIAIS ATUALIZADAS ---
     const TUNNEL = "https://auburn-november-shortly-log.trycloudflare.com";
     const AUTH_KEY = "eS21DOtld";
     const socket = io(TUNNEL, { auth: { token: AUTH_KEY }, transports: ['websocket'] });
@@ -152,13 +152,35 @@
     let isHostActive = false;
     let activeRooms = new Set();
     
-    // Controle de saída rápida (2 Escs)
+    // Identidade local temporária para o cursor virtual
+    const myId = "usr_" + Math.random().toString(36).substr(2, 5);
+    const guestColor = getRandomNeonColor();
+
     let escCount = 0;
     let escTimer = null;
-
-    // Rate limits
     let lastMoveTime = 0;
-    let readyForNextFrame = true; 
+
+    // Gerenciadores de cache de imagem
+    let lastFrameUrl = null;
+    let frameCount = 0;
+    let heartbeatInterval = null;
+
+    // Helper para converter base64 para binário Blob nativo
+    function dataURItoBlob(dataURI) {
+        const byteString = atob(dataURI.split(',')[1]);
+        const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) {
+            ia[i] = byteString.charCodeAt(i);
+        }
+        return new Blob([ab], {type: mimeString});
+    }
+
+    function getRandomNeonColor() {
+        const neonColors = ["#00ff88", "#ff3366", "#3399ff", "#ff9933", "#cc33ff", "#ffff33"];
+        return neonColors[Math.floor(Math.random() * neonColors.length)];
+    }
 
     // --- MENU CONTROLS ---
     function setDevice(device) {
@@ -176,7 +198,6 @@
     async function initHostFlow() {
         myRoom = Math.random().toString(36).substring(2, 6).toUpperCase();
         try {
-            // Forçando captura estável em 480p e 15 FPS
             const stream = await navigator.mediaDevices.getDisplayMedia({
                 video: { 
                     width: { ideal: 854, max: 854 }, 
@@ -190,35 +211,19 @@
             document.getElementById('screen-hosting').style.display = 'flex';
             document.getElementById('room-code-display').innerText = myRoom;
 
-            // CORREÇÃO: Anexando o vídeo de forma invisível ao DOM para forçar decodificação contínua de quadros
             const video = document.createElement('video');
-            video.autoplay = true;
-            video.muted = true;
-            video.playsInline = true;
-            video.style.position = 'absolute';
-            video.style.top = '-9999px';
-            video.style.left = '-9999px';
-            video.style.width = '1px';
-            video.style.height = '1px';
-            video.style.opacity = '0';
-            document.body.appendChild(video);
-
             video.srcObject = stream;
             video.play();
 
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
 
-            // Intervalo de captura (15 FPS)
             setInterval(() => {
-                // CORREÇÃO: Verificação de largura de fluxo de vídeo (mais confiável do que readyState puro no mobile)
-                if (video.videoWidth > 0 && readyForNextFrame) {
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
                     canvas.width = 854; 
                     canvas.height = 480;
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                     
-                    readyForNextFrame = false; // Trava o fluxo até o sinal de renderização (Ack) do outro lado
-
                     socket.emit('RemoteEvent', {
                         type: 'screen_frame',
                         room: myRoom,
@@ -241,7 +246,6 @@
         
         activeRooms.clear();
         document.getElementById('server-list').innerHTML = `<div style="padding:15px; color:#666; font-size:0.8rem;">Searching rooms...</div>`;
-        
         socket.emit('RemoteEvent', { type: 'room_ping' });
     }
 
@@ -257,26 +261,48 @@
             }
         }
 
-        // CORREÇÃO: Sinal para quebrar o impasse (deadlock) de handshake de vídeo ao conectar
-        if (packet.type === 'client_ready' && packet.room === myRoom && isHostActive) {
-            readyForNextFrame = true; // Libera imediatamente o primeiro quadro
-        }
-
+        // Renderizar frame recebido no cliente aplicando Garbage Collection forçado
         if (packet.type === 'screen_frame' && packet.room === myRoom && !isHostActive) {
-            const screenImg = document.getElementById('remote-screen');
+            const imgElement = document.getElementById('remote-screen');
             
-            screenImg.onload = () => {
-                // Notifica o host para enviar o próximo frame
-                socket.emit('RemoteEvent', { type: 'frame_ack', room: myRoom });
-            };
-            
-            screenImg.src = packet.img;
-        }
+            // Revoga a URL anterior imediatamente para limpar cache e RAM do navegador
+            if (lastFrameUrl) {
+                URL.revokeObjectURL(lastFrameUrl);
+            }
 
-        if (packet.type === 'frame_ack' && packet.room === myRoom && isHostActive) {
-            readyForNextFrame = true; 
+            const blob = dataURItoBlob(packet.img);
+            const objectUrl = URL.createObjectURL(blob);
+            
+            imgElement.src = objectUrl;
+            lastFrameUrl = objectUrl;
+
+            // Tratamento extra: a cada 5 frames força um reflow visual limpando memória do DOM
+            frameCount++;
+            if (frameCount % 5 === 0) {
+                imgElement.style.display = 'none';
+                imgElement.offsetHeight; 
+                imgElement.style.display = 'block';
+            }
         }
     });
+
+    // --- ENVIADOR DE HEARTBEAT (WATCHDOG DE 10S) ---
+    function startWatcherHeartbeat() {
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
+        heartbeatInterval = setInterval(() => {
+            if (isHostActive || !myRoom) return;
+            
+            // Envia batimento cardíaco identificando apelido e cor do cursor
+            socket.emit('RemoteEvent', {
+                type: 'remote_input',
+                action: 'heartbeat',
+                room: myRoom,
+                id: myId,
+                name: 'guest_1',
+                color: guestColor
+            });
+        }, 3000); // Batimento a cada 3 segundos
+    }
 
     function updateServerList() {
         const listDiv = document.getElementById('server-list');
@@ -302,9 +328,10 @@
 
     function startClientView() {
         document.getElementById('screen-join').style.display = 'none';
-        
         const viewport = document.getElementById('viewport');
         viewport.style.display = 'flex';
+
+        startWatcherHeartbeat();
 
         if (deviceSelected === 'mobile') {
             document.getElementById('mobile-keyboard').style.display = 'grid';
@@ -312,23 +339,19 @@
         } else {
             setupPCDrivers();
         }
-
-        // CORREÇÃO: Avisa o Host que o Client está pronto para iniciar a transmissão
-        socket.emit('RemoteEvent', { type: 'client_ready', room: myRoom });
     }
 
-    // --- INPUT SENDER ---
+    // --- ENVIADOR COM LIMITADOR DE 20 REQS/S ---
     function sendInput(action, data) {
         if (isHostActive) return;
 
-        // Limita atualizações de arraste do mouse a no máximo 20 Hz
         if (action === 'mousemove') {
             const now = Date.now();
-            if (now - lastMoveTime < 50) return;
+            if (now - lastMoveTime < 50) return; 
             lastMoveTime = now;
         }
 
-        const payload = { type: 'remote_input', room: myRoom, action: action, ...data };
+        const payload = { type: 'remote_input', room: myRoom, action: action, id: myId, ...data };
         socket.emit('RemoteEvent', payload);
     }
 
@@ -336,7 +359,7 @@
         sendInput(state === 'down' ? 'keydown' : 'keyup', { key: k });
     }
 
-    // --- PC DRIVERS ---
+    // --- CONTROLES DE INPUT (DRIVER PC) ---
     function setupPCDrivers() {
         const screen = document.getElementById('remote-screen');
         
@@ -350,7 +373,6 @@
                 const rect = screen.getBoundingClientRect();
                 const x = Math.min(Math.max(0, (e.movementX + rect.width/2) / rect.width), 1);
                 const y = Math.min(Math.max(0, (e.movementY + rect.height/2) / rect.height), 1);
-                
                 sendInput('mousemove', { x, y });
             }
         });
@@ -373,7 +395,9 @@
 
         window.addEventListener('keydown', (e) => {
             if (document.pointerLockElement === screen) {
-                if (!e.repeat) sendInput('keydown', { key: e.key });
+                if (!e.repeat) {
+                    sendInput('keydown', { key: e.key });
+                }
                 e.preventDefault();
             }
             
@@ -381,7 +405,7 @@
                 escCount++;
                 clearTimeout(escTimer);
                 if (escCount >= 2) {
-                    location.reload();
+                    location.reload(); 
                 } else {
                     escTimer = setTimeout(() => { escCount = 0; }, 1000);
                 }
@@ -396,7 +420,7 @@
         });
     }
 
-    // --- MOBILE DRIVERS ---
+    // --- CONTROLES DE INPUT (DRIVER MOBILE) ---
     function setupMobileDrivers() {
         const screen = document.getElementById('remote-screen');
         let lastTap = 0;
@@ -408,7 +432,6 @@
             const rect = screen.getBoundingClientRect();
             const x = Math.min(Math.max(0, (touch.clientX - rect.left) / rect.width), 1);
             const y = Math.min(Math.max(0, (touch.clientY - rect.top) / rect.height), 1);
-            
             sendInput('mousemove', { x, y });
         });
 
