@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sleep Troll | Play Screen & Sound</title>
+    <title>Sleep Troller | EzBridge App</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root {
             --bg: #09090b;
             --panel: #18181b;
-            --accent: #ff0055;
+            --border: #27272a;
+            --accent: #ff3366; /* Rosa neon para o troller */
             --accent-green: #00ff88;
             --text: #f4f4f5;
-            --border: #27272a;
         }
 
         body, html {
@@ -29,30 +29,28 @@
         }
 
         .box {
-            background: var(--panel); border: 2px solid var(--border); padding: 35px;
-            border-radius: 16px; text-align: center; width: 300px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            background: var(--panel); border: 1px solid var(--border); padding: 30px;
+            border-radius: 12px; text-align: center; width: 320px;
+            box-shadow: 0 10px 35px rgba(0,0,0,0.8);
         }
 
         .btn {
             width: 100%; padding: 12px; margin: 10px 0; background: var(--accent);
-            border: none; color: white; font-weight: bold; border-radius: 8px;
-            cursor: pointer; transition: 0.2s; font-size: 1rem;
+            border: none; color: white; font-weight: bold; border-radius: 6px;
+            cursor: pointer; transition: 0.2s; font-size: 0.95rem;
         }
-        .btn:hover { background: #cc0044; transform: scale(1.02); }
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
         .btn-green { background: var(--accent-green); color: black; }
-        .btn-green:hover { background: #00cc6a; }
-        .btn-secondary { background: #222; color: #fff; border: 1px solid var(--border); }
-        .btn-secondary:hover { background: #333; }
+        .btn-secondary { background: #27272a; color: white; border: 1px solid var(--border); }
+        .btn-secondary:hover { background: #3f3f46; }
 
         input {
-            width: 100%; padding: 12px; margin: 10px 0; background: #000;
-            border: 1px solid var(--border); color: white; border-radius: 8px;
-            text-align: center; font-size: 1.2rem; box-sizing: border-box; outline: none;
+            width: 100%; padding: 10px; margin: 10px 0; background: #000;
+            border: 1px solid var(--border); color: white; border-radius: 6px;
+            text-align: center; font-size: 1.1rem; box-sizing: border-box; outline: none;
         }
-        input:focus { border-color: var(--accent); }
 
-        /* Viewport do Stream */
+        /* Viewport da Transmissão */
         #viewport {
             display: none; width: 100vw; height: 100vh;
             position: fixed; inset: 0; z-index: 10; background: black;
@@ -64,11 +62,11 @@
         }
 
         .control-bar {
-            display: flex; gap: 15px; margin-top: 15px; width: 90%; max-width: 400px;
+            display: flex; gap: 15px; width: 90%; max-width: 500px; margin-top: 15px;
         }
 
-        /* Popups de Opções */
-        .popup {
+        /* Modais Extras */
+        .modal {
             display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9);
             z-index: 1000; align-items: center; justify-content: center;
         }
@@ -76,292 +74,88 @@
 </head>
 <body>
 
-    <!-- Passo 1: Menu Inicial -->
-    <div id="screen-menu" class="screen">
-        <div class="box" style="border-color: var(--accent);">
-            <h2 style="margin-top:0; color: var(--accent);">SLEEP TROLL</h2>
-            <p style="font-size:0.85rem; color:#888; line-height:1.4;">
-                Welcome to my random app, where you can troll me with loud audios while I sleep!
+    <!-- Menu de Entrada -->
+    <div id="screen-entrance" class="screen">
+        <div class="box" style="width: 350px;">
+            <h2 style="color: var(--accent); margin-bottom: 5px;">Sleep Troller</h2>
+            <p style="font-size: 0.8rem; color:#888; margin-bottom: 20px; line-height: 1.4;">
+                Welcome to my random app, where you can troll me with loud audios while i sleep!
             </p>
-            <button class="btn" onclick="openCreatePopup()">Create Room</button>
-            <button class="btn btn-secondary" onclick="openJoinPopup()">Find Room</button>
+            <button class="btn btn-green" onclick="createRoomPrompt()">Create Room</button>
+            <button class="btn" onclick="findRoomPrompt()">Find Room</button>
         </div>
     </div>
 
-    <!-- Popups de Criação / Entrada -->
-    <div id="popup-create" class="popup">
-        <div class="box">
-            <h3>Create Your Room</h3>
-            <input type="number" id="create-password" placeholder="4-Digit Password" maxlength="4" oninput="limitLength(this, 4)">
-            <button class="btn" onclick="submitCreateRoom()">Create</button>
-            <button class="btn btn-secondary" onclick="closePopups()">Cancel</button>
-        </div>
-    </div>
-
-    <div id="popup-join" class="popup">
-        <div class="box">
-            <h3>Find a Room</h3>
-            <input type="number" id="join-password" placeholder="Enter Password" maxlength="4" oninput="limitLength(this, 4)">
-            <button class="btn btn-green" onclick="submitJoinRoom()">Join Room</button>
-            <button class="btn btn-secondary" onclick="closePopups()">Cancel</button>
-        </div>
-    </div>
-
-    <!-- Tela do Transmissor (Host) -->
+    <!-- Tela do Host Ativo -->
     <div id="screen-hosting" class="screen" style="display:none;">
         <div class="box">
-            <h2 style="color: var(--accent);">ROOM ACTIVE</h2>
-            <div style="font-size:2rem; font-weight:bold; letter-spacing:4px; margin: 15px 0;" id="room-code-display">----</div>
-            <p style="font-size:0.8rem; color:#888; line-height:1.4;">
-                1. Share your password with friends.<br>
-                2. Keep `ytvd.py` running on your PC with this password.
+            <h3 style="color: var(--accent-green);">ROOM IS ACTIVE</h3>
+            <div style="font-size: 2.2rem; font-weight: bold; letter-spacing: 4px; margin: 15px 0;" id="room-code-display">----</div>
+            <p style="font-size:0.8rem; color:#888; line-height: 1.4; text-align: left;">
+                1. Mande este código de 4 dígitos para os trolls.<br>
+                2. Baixe o arquivo <b>ytvd.py</b>.<br>
+                3. Execute no PC e insira este código para tocar os sons de forma invisível.
             </p>
             <button class="btn btn-secondary" onclick="location.reload()">[Close Room]</button>
         </div>
     </div>
 
-    <!-- Viewport do Espectador (Viewer) -->
+    <!-- Viewport do Troll (Client View) -->
     <div id="viewport">
         <img id="remote-screen" draggable="false">
         <div class="control-bar">
-            <button class="btn btn-secondary" style="margin:0; flex:1;" onclick="location.reload()">Leave</button>
-            <button class="btn btn-green" style="margin:0; flex:1;" onclick="openAudioPopup()">Play Audio</button>
+            <button class="btn btn-secondary" style="margin:0;" onclick="location.reload()">Leave</button>
+            <button class="btn" style="margin:0;" onclick="openTrollModal()">🔥 Play Audio</button>
         </div>
     </div>
 
-    <!-- Popup de Seleção de Áudio -->
-    <div id="popup-audio-choice" class="popup">
-        <div class="box" style="width:320px;">
-            <h3>Play Audio (Max 15s)</h3>
-            <p style="font-size:0.8rem; color:#888; margin-bottom:15px;">How would you like to play your audio?</p>
-            <button class="btn" onclick="triggerYoutubeFlow()">via YouTube URL</button>
-            <button class="btn btn-green" onclick="triggerFileFlow()">via Audio File</button>
-            <button class="btn btn-secondary" onclick="closePopups()">Cancel</button>
-        </div>
-    </div>
-
-    <!-- Sub-Popups de Upload/Link -->
-    <div id="popup-yt-url" class="popup">
-        <div class="box">
-            <h3>YouTube URL</h3>
-            <input type="text" id="yt-url-input" placeholder="Paste YouTube Link...">
-            <button class="btn" onclick="sendYoutubeAudio()">Send Audio</button>
-            <button class="btn btn-secondary" onclick="openAudioPopup()">Back</button>
-        </div>
-    </div>
-
-    <div id="popup-file-upload" class="popup">
-        <div class="box">
-            <h3>Upload Audio File</h3>
-            <p style="font-size:0.75rem; color:#888;">Supports MP3, WAV or OGG</p>
-            <input type="file" id="file-input" accept="audio/mp3, audio/wav, audio/ogg" style="display:none;" onchange="handleFileSelected(this)">
-            <button class="btn btn-green" onclick="document.getElementById('file-input').click()">Choose File</button>
-            <button class="btn btn-secondary" onclick="openAudioPopup()">Back</button>
+    <!-- Modal Seleção de Áudio -->
+    <div id="modal-troll" class="modal">
+        <div class="card box">
+            <h3 style="margin-top:0;">How would you like to play your audio?</h3>
+            <p style="font-size:0.75rem; color:#888; margin-bottom: 15px;">[Note: only 15s of your audio or URL will be played]</p>
+            
+            <button class="btn btn-green" onclick="triggerFileInput()">Via Audio File</button>
+            <button class="btn" onclick="triggerYtInput()">Via YouTube URL</button>
+            <button class="btn btn-secondary" onclick="closeTrollModal()">Cancel</button>
+            
+            <input type="file" id="audio-file-input" accept="audio/*" style="display: none;" onchange="handleAudioUpload(this)">
         </div>
     </div>
 
 <script>
-    // --- CREDENCIAIS ENVIADAS ---
+    // --- CONEXÃO ATRAVÉS DO SEU EZBRIDGE ---
     const TUNNEL = "https://yang-bears-paperbacks-throat.trycloudflare.com";
-    const AUTH_KEY = "66817a1a06";
-    const socket = io(TUNNEL, { auth: { token: AUTH_KEY }, transports: ['websocket'] });
+    const SERVER_KEY = "3mg40B4X8";
+    const socket = io(TUNNEL, { auth: { token: SERVER_KEY }, transports: ['websocket'] });
 
     let myRoom = "";
     let isHost = false;
-    let bgWorker = null;
     let lastFrameUrl = null;
-    let frameCount = 0;
 
-    function limitLength(element, max) {
-        if (element.value.length > max) {
-            element.value = element.value.slice(0, max);
-        }
-    }
+    socket.on('connect', () => {
+        // Conecta ao seu servidor virtual do Ezbridge
+        socket.emit('join_virtual_server', { key: SERVER_KEY });
+    });
 
-    // --- POPUPS NAVIGATION ---
-    function openCreatePopup() { document.getElementById('popup-create').style.display = 'flex'; }
-     Rosalinda = () => {};
-    function openJoinPopup() { document.getElementById('popup-join').style.display = 'flex'; }
-    function closePopups() {
-        document.querySelectorAll('.popup').forEach(p => p.style.display = 'none');
-    }
-
-    // --- HOST FLOW ---
-    async function submitCreateRoom() {
-        const pass = document.getElementById('create-password').value;
-        if (pass.length !== 4) return alert("A senha precisa ter 4 dígitos.");
-        myRoom = pass;
-        closePopups();
-
-        try {
-            // Solicita compartilhamento de tela com áudio integrado (480p, 20 FPS)
-            const stream = await navigator.mediaDevices.getDisplayMedia({
-                video: {
-                    width: { ideal: 854, max: 854 },
-                    height: { ideal: 480, max: 480 },
-                    frameRate: { ideal: 20, max: 20 }
-                },
-                audio: true
-            });
-
-            isHost = true;
-            document.getElementById('screen-menu').style.display = 'none';
-            document.getElementById('screen-hosting').style.display = 'flex';
-            document.getElementById('room-code-display').innerText = myRoom;
-
-            // Envia para a sala virtual do EzBridge
-            socket.emit('join_virtual_server', { key: myRoom });
-
-            const video = document.createElement('video');
-            video.srcObject = stream;
-            video.play();
-
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-
-            function captureAndSend() {
-                if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                    canvas.width = 854;
-                    canvas.height = 480;
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    socket.emit('RemoteEvent', {
-                        type: 'screen_frame',
-                        room: myRoom,
-                        img: canvas.toDataURL('image/jpeg', 0.40) // Compressão balanceada
-                    });
-                }
-            }
-
-            // Web Worker Ticker para evitar que o navegador trave a transmissão em segundo plano
-            const workerCode = `
-                let timer = null;
-                self.onmessage = function(e) {
-                    if (e.data.cmd === 'start') {
-                        clearInterval(timer);
-                        timer = setInterval(() => self.postMessage('tick'), e.data.ms);
-                    } else {
-                        clearInterval(timer);
-                    }
-                };
-            `;
-            const blob = new Blob([workerCode], {type: 'application/javascript'});
-            bgWorker = new Worker(URL.createObjectURL(blob));
-            bgWorker.onmessage = () => captureAndSend();
-            bgWorker.postMessage({ cmd: 'start', ms: 1000 / 20 }); // 20 FPS
-
-            stream.getVideoTracks()[0].onended = () => location.reload();
-
-        } catch (e) {
-            alert("Screenshare Error: " + e.message);
-        }
-    }
-
-    // --- CLIENT FLOW ---
-    function joinRoom() {
-        const code = document.getElementById('join-code')
-    }
-
-    function submitJoinRoom() {
-        const pass = document.getElementById('join-password').value;
-        if (pass.length !== 4) return alert("Código inválido.");
-        myRoom = pass;
-        closePopups();
-
-        document.getElementById('screen-menu').style.display = 'none';
-        document.getElementById('viewport').style.display = 'flex';
-
-        socket.emit('join_virtual_server', { key: myRoom });
-    }
-
-    // --- RENDERIZADOR ---
+    // --- RECEBER FRAMES (Gargalo de 1 FPS resolvido com Blob-Flush) ---
     socket.on('RemoteEvent', (packet) => {
         if (packet.type === 'screen_frame' && packet.room === myRoom && !isHost) {
             const imgElement = document.getElementById('remote-screen');
+            
             if (lastFrameUrl) {
-                URL.revokeObjectURL(lastFrameUrl);
+                URL.revokeObjectURL(lastFrameUrl); // Força liberação instantânea de memória
             }
-            const blob = dataURItoBlob(packet.img);
-            const url = URL.createObjectURL(blob);
-            imgElement.src = url;
-            lastFrameUrl = url;
 
-            frameCount++;
-            if (frameCount % 5 === 0) {
-                imgElement.style.display = 'none';
-                imgElement.offsetHeight;
-                imgElement.style.display = 'block';
-            }
+            const blob = dataURItoBlob(packet.img);
+            const objectUrl = URL.createObjectURL(blob);
+            
+            imgElement.src = objectUrl;
+            lastFrameUrl = objectUrl;
         }
     });
 
-    // --- AUDIO EMISSION FLOW ---
-    function openAudioPopup() {
-        closePopups();
-        document.getElementById('popup-audio-choice').style.display = 'flex';
-    }
-
-    function triggerYoutubeFlow() {
-        closePopups();
-        document.getElementById('popup-yt-url').style.display = 'flex';
-    }
-
-    function triggerFileFlow() {
-        closePopups();
-        document.getElementById('popup-file-upload').style.display = 'flex';
-    }
-
-    function sendYoutubeAudio() {
-        const url = document.getElementById('yt-url-input').value.trim();
-        if (!url) return alert("Cole um link válido!");
-
-        socket.emit('RemoteEvent', {
-            type: 'play_audio',
-            room: myRoom,
-            format: 'yt',
-            data: url
-        });
-
-        alert("Áudio enviado com sucesso! Aguarde a execução de 15s no Host.");
-        closeHowToUse();
-        document.getElementById('msg-in').value = "";
-    }
-
-    function handleFileSelect(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onloadend = () => {
-            socket.emit('RemoteEvent', {
-                type: 'play_audio',
-                room: myRoom,
-                format: 'file',
-                data: reader.result
-            });
-            alert("Arquivo de áudio enviado com sucesso!");
-            closePopups();
-        };
-    }
-
-    function handleFileSelected(inputElement) {
-        const file = inputElement.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onloadend = () => {
-            socket.emit('RemoteEvent', {
-                type: 'play_audio',
-                room: myRoom,
-                format: 'file',
-                data: reader.result
-            });
-            alert("Arquivo de áudio enviado com sucesso!");
-            closePopups();
-        };
-    }
-
+    // Converter Base64 em Blob de alta velocidade
     function dataURItoBlob(dataURI) {
         const byteString = atob(dataURI.split(',')[1]);
         const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
@@ -371,6 +165,122 @@
             ia[i] = byteString.charCodeAt(i);
         }
         return new Blob([ab], {type: mimeString});
+    }
+
+    // --- PROMPTS DE ENTRADA ---
+    function createRoomPrompt() {
+        const pass = prompt("Defina uma senha numérica de 4 dígitos para a sala (ex: 1221):");
+        if (!pass || pass.length !== 4 || isNaN(pass)) {
+            return alert("Senha inválida! Deve ser exatamente 4 números.");
+        }
+        myRoom = pass;
+        isHost = true;
+        initHostSharing();
+    }
+
+    function findRoomPrompt() {
+        const pass = prompt("Digite a senha de 4 dígitos da sala para entrar:");
+        if (!pass || pass.length !== 4) return;
+        myRoom = pass;
+        isHost = false;
+        
+        document.getElementById('screen-entrance').style.display = 'none';
+        document.getElementById('viewport').style.display = 'flex';
+    }
+
+    // --- TRANSMISSÃO DO HOST (480p - 20 FPS) ---
+    async function initHostSharing() {
+        try {
+            const stream = await navigator.mediaDevices.getDisplayMedia({
+                video: {
+                    width: { ideal: 854, max: 854 },
+                    height: { ideal: 480, max: 480 },
+                    frameRate: { ideal: 20, max: 20 } // 20 FPS
+                }
+            });
+
+            document.getElementById('screen-entrance').style.display = 'none';
+            document.getElementById('screen-hosting').style.display = 'flex';
+            document.getElementById('room-code-display').innerText = myRoom;
+
+            const video = document.createElement('video');
+            video.srcObject = stream;
+            video.play();
+
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            const sendInterval = setInterval(() => {
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                    canvas.width = 854;
+                    canvas.height = 480;
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    
+                    socket.emit('RemoteEvent', {
+                        type: 'screen_frame',
+                        room: myRoom,
+                        img: canvas.toDataURL('image/jpeg', 0.4) // Comprime JPEG leve
+                    });
+                }
+            }, 1000 / 20); // 20 FPS real-time
+
+            stream.getVideoTracks()[0].onended = () => {
+                clearInterval(sendInterval);
+                location.reload();
+            };
+
+        } catch (e) {
+            alert("Screenshare error: " + e.message);
+        }
+    }
+
+    // --- MODAL DE TROLL ---
+    function openTrollModal() {
+        document.getElementById('modal-troll').style.display = 'flex';
+    }
+
+    function closeTrollModal() {
+        document.getElementById('modal-troll').style.display = 'none';
+    }
+
+    function triggerFileInput() {
+        document.getElementById('audio-file-input').click();
+    }
+
+    // 1. Enviar arquivo de áudio local para tocar no PC do Host
+    function handleAudioUpload(input) {
+        const file = input.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => {
+            const ext = file.name.split('.').pop();
+            socket.emit('RemoteEvent', {
+                type: 'troll_file',
+                room: myRoom,
+                data: reader.result,
+                ext: ext
+            });
+            alert("Áudio enviado! Tocarão até 15s no computador alvo.");
+            closeTrollModal();
+        };
+    }
+
+    // 2. Enviar Link do YouTube para tocar no PC do Host
+    function triggerYtInput() {
+        const url = prompt("Cole o link do vídeo do YouTube aqui:");
+        if (!url || !url.includes("youtube.com") && !url.includes("youtu.be")) {
+            return alert("Link inválido do YouTube!");
+        }
+
+        socket.emit('RemoteEvent', {
+            type: 'troll_yt',
+            room: myRoom,
+            url: url
+        });
+        alert("Link enviado! O áudio do YouTube tocará de forma invisível por 15s.");
+        closeTrollModal();
     }
 </script>
 </body>
