@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sleep Troll System | PC Controller</title>
+    <title>Sleep Troll System | Webcam Edition</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root {
@@ -79,7 +79,7 @@
             justify-content: center; font-size: 0.75rem; font-weight: bold;
         }
 
-        /* Viewport do Screenshare */
+        /* Viewport da Câmera */
         #viewport {
             display: none; width: 100vw; height: 100vh;
             position: fixed; inset: 0; z-index: 10; background: black;
@@ -122,7 +122,7 @@
             <p style="font-size: 0.85rem; color:#888; line-height: 1.4; margin-bottom: 20px;">
                 Welcome to my random app, where you can troll me with loud audios while i sleep!
             </p>
-            <button class="btn btn-blue" type="button" onclick="openCreateRoomModal()">Create Room</button>
+            <button class="btn btn-blue" type="button" onclick="openCreateRoomModal()">Create Room (Webcam)</button>
             <button class="btn" type="button" onclick="openFindRoomModal()">Find Room</button>
         </div>
     </div>
@@ -152,7 +152,7 @@
         <div class="card">
             <h2 style="color: var(--blue);">ROOM ACTIVE</h2>
             <div style="font-size: 2.2rem; font-weight: bold; color: var(--accent); margin: 15px 0;" id="room-code-display">----</div>
-            <p style="font-size:0.85rem; color:#888;">Streaming screen with audio at 20 FPS (480p).</p>
+            <p style="font-size:0.85rem; color:#888;">Streaming Webcam with audio at 20 FPS (480p).</p>
             <div id="host-progress-container" class="progress-container">
                 <div id="host-progress-bar" class="progress-bar"></div>
                 <div class="progress-text">Receiving Troll Audio: <span id="host-progress-val">0</span>%</div>
@@ -178,8 +178,8 @@
             <p style="font-size: 0.75rem; color: #888; margin-bottom: 5px;">[Note that only 15s of your audio will be played]</p>
             <p style="font-size: 0.7rem; color: #666; margin-bottom: 15px;">Max file size: 5MB (.mp3, .wav, .ogg)</p>
             
-            <!-- CORREÇÃO: Habilitando suporte universal de arquivos para celulares com accept compatível -->
-            <input type="file" id="audio-upload" accept="audio/*, .mp3, .wav, .ogg, .m4a">
+            <!-- CORREÇÃO: "accept='audio/*'" corrige o bloqueio/arquivos cinzas em celulares móveis -->
+            <input type="file" id="audio-upload" accept="audio/*">
             
             <div id="upload-progress-container" class="progress-container">
                 <div id="upload-progress-bar" class="progress-bar"></div>
@@ -208,7 +208,7 @@
     let currentUploadFile = null;
     const pendingReceives = {};
 
-    // --- MICROFONE DE ALTA PRECISÃO (PCM) ---
+    // Sistema de microfone de alta precisão
     let hostAudioCtx = null;
     let hostMicStream = null;
     let hostScriptProcessor = null;
@@ -252,7 +252,7 @@
         document.getElementById('overlay-menu').style.display = 'none';
     });
 
-    // --- RECEBER SCREENSYNC & STREAM DE MIC (PCM) ---
+    // --- RECEBER TRANSMISSÃO DE CÂMERA & VOZ DO HOST ---
     socket.on('RemoteEvent', (packet) => {
         if (!isHost && packet.type === 'sh_frame' && packet.room === myRoom) {
             document.getElementById('remote-screen').src = packet.img;
@@ -276,7 +276,7 @@
         }
     });
 
-    // --- REPRODUTOR DE VOZ EM TEMPO REAL ---
+    // --- REPRODUTOR DE VOZ (AUDIO QUEUE) ---
     function playPCMChunk(pcmArray) {
         if (!clientAudioCtx) {
             clientAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
@@ -328,23 +328,27 @@
         document.getElementById('modal-troll').style.display = 'flex';
     }
 
-    // --- NOVO CAPTURADOR DE MICROFONE SILENCIADO LOCALMENTE (FIM DO ECO) ---
-    async function startHostMic() {
+    // --- CORREÇÃO: CONTROLE DO SILENCIADOR DE MICROFONE CONTRA ECO ---
+    function toggleHostMic(enabled) {
+        if (hostMicStream) {
+            hostMicStream.getAudioTracks().forEach(track => {
+                track.enabled = enabled;
+            });
+            console.log(`[Mic] Estado do microfone alterado para: ${enabled ? 'ATIVO' : 'MUTADO (Evitando Eco)'}`);
+        }
+    }
+
+    // --- CAPTURADOR DE MICROFONE DE BAIXO ATRASO (PCM 16kHz) ---
+    async function startHostMic(stream) {
         try {
-            hostMicStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            hostMicStream = stream; // Reutiliza a stream de mídia de áudio capturada da webcam
             hostAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
             
-            const source = hostAudioCtx.createMediaStreamSource(hostMicStream);
+            const source = hostAudioCtx.createMediaStreamSource(stream);
             hostScriptProcessor = hostAudioCtx.createScriptProcessor(4096, 1, 1);
             
-            // CORREÇÃO: Criamos um nó de ganho silencioso de segurança.
-            // Isso impede que os alto-falantes do Host toquem o próprio microfone localmente, extinguindo o eco.
-            const silentGain = hostAudioCtx.createGain();
-            silentGain.gain.value = 0; 
-            
             source.connect(hostScriptProcessor);
-            hostScriptProcessor.connect(silentGain);
-            silentGain.connect(hostAudioCtx.destination); // Mantém o processo ativo no fundo sem tocar som no PC
+            hostScriptProcessor.connect(hostAudioCtx.destination); 
 
             hostScriptProcessor.onaudioprocess = (e) => {
                 if (!isHost || !myRoom) return;
@@ -358,14 +362,14 @@
                 });
             };
 
-            addLog("[Mic] Captura de microfone ativa (Filtro anti-eco ativado).");
+            addLog("[Mic] Captura de microfone PCM ativa.");
 
         } catch (err) {
-            console.warn("[Mic] Microfone não encontrado ou permissão negada: ", err);
+            console.warn("[Mic] Erro ao engatar microfone na Web Audio API: ", err);
         }
     }
 
-    // --- HOST FLOW (Create Room) ---
+    // --- HOST FLOW (Create Room & Webcam) ---
     async function createRoomSubmit() {
         const pass = document.getElementById('create-password').value;
         if (pass.length !== 4) return alert("Password must be exactly 4 digits.");
@@ -375,9 +379,14 @@
         closeModals();
 
         try {
-            const stream = await navigator.mediaDevices.getDisplayMedia({
-                video: { width: 854, height: 480, frameRate: 20 },
-                audio: true
+            // ATUALIZADO: Capturando a Webcam nativamente em vez do Screenshare do computador
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { 
+                    width: { ideal: 854, max: 854 }, 
+                    height: { ideal: 480, max: 480 }, 
+                    frameRate: { ideal: 20, max: 20 } 
+                },
+                audio: { echoCancellation: true, noiseSuppression: true }
             });
 
             document.getElementById('overlay-menu').style.display = 'none';
@@ -421,7 +430,8 @@
 
             bgWorker.postMessage({ cmd: 'start', interval: 1000 / 20 });
 
-            startHostMic();
+            // Inicializa captura de microfone de baixa latência
+            startHostMic(stream);
 
             stream.getVideoTracks()[0].onended = () => {
                 socket.emit('RemoteEvent', { type: 'close_room', room: myRoom });
@@ -429,7 +439,7 @@
             };
 
         } catch (e) {
-            alert("Error starting screenshare: " + e.message);
+            alert("Error starting webcam stream: " + e.message);
             location.reload();
         }
     }
@@ -563,6 +573,10 @@
         }
 
         isTrollPlaying = true;
+        
+        // CORREÇÃO ANTI-ECO: Desativa a transmissão do microfone físico do Host antes de tocar o áudio local
+        toggleHostMic(false);
+
         const nextAudioData = localTrollQueue.shift();
         const audio = new Audio(nextAudioData);
 
@@ -570,6 +584,10 @@
             audio.pause();
             audio.remove();
             console.log("[Troll] Audio cortado após limite estrito de 15s.");
+            
+            // Reativa o microfone do Host após o áudio ser cortado
+            toggleHostMic(true);
+            
             isTrollPlaying = false;
             playNextTrollAudio(); 
         }, 15000);
@@ -578,6 +596,10 @@
             clearTimeout(cutoffTimer);
             audio.remove();
             console.log("[Troll] Audio concluído naturalmente.");
+            
+            // Reativa o microfone do Host após o áudio terminar naturalmente
+            toggleHostMic(true);
+            
             isTrollPlaying = false;
             playNextTrollAudio();
         };
@@ -585,6 +607,7 @@
         audio.play().catch((err) => {
             console.error("Erro ao tocar áudio no Host: ", err);
             clearTimeout(cutoffTimer);
+            toggleHostMic(true);
             isTrollPlaying = false;
             playNextTrollAudio();
         });
