@@ -2,352 +2,545 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sleep Troll System | PC Controller</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EzBridge | Cloud Virtual Hosting</title>
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root {
-            --bg: #030303;
-            --panel: #0d0d11;
-            --accent: #ff007f; /* Rosa Neon */
-            --blue: #00f0ff; /* Azul Neon */
-            --border: #1a1a24;
-            --text: #ffffff;
+            --bg: #09090b;
+            --panel: #18181b;
+            --border: #27272a;
+            --accent: #00ff88;
+            --accent-dim: rgba(0, 255, 136, 0.15);
+            --text: #f4f4f5;
         }
 
         body, html {
             margin: 0; padding: 0; height: 100%;
             background-color: var(--bg); color: var(--text);
             font-family: 'Segoe UI', system-ui, sans-serif;
-            overflow: hidden; touch-action: none; user-select: none;
+            display: flex; align-items: center; justify-content: center;
         }
 
-        /* Buffer Screen */
         .overlay {
-            position: fixed; inset: 0; background: var(--bg);
+            position: fixed; inset: 0; background: rgba(0,0,0,0.95);
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             z-index: 2000; transition: 0.3s;
         }
 
         .card {
-            background: var(--panel); border: 2px solid var(--border); padding: 35px;
-            border-radius: 16px; text-align: center; width: 320px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+            background: var(--panel); border: 1px solid var(--border); padding: 30px;
+            border-radius: 12px; width: 90%; max-width: 450px; text-align: center;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.8);
         }
 
-        h1, h2, h3 { color: var(--blue); margin-top: 0; text-shadow: 0 0 10px rgba(0, 240, 255, 0.4); }
+        h1, h2, h3 { color: var(--accent); margin-top: 0; letter-spacing: 1px; }
 
         .btn {
-            width: 100%; padding: 14px; margin: 10px 0; background: var(--accent);
-            border: none; color: white; font-weight: bold; border-radius: 8px;
-            cursor: pointer; transition: 0.2s; font-size: 1rem;
-            text-shadow: 0 0 5px rgba(255, 0, 127, 0.5);
+            width: 100%; padding: 12px; margin: 10px 0; background: var(--accent);
+            border: none; color: black; font-weight: bold; border-radius: 6px;
+            cursor: pointer; transition: 0.2s; font-size: 0.95rem;
         }
-        .btn:hover { background: #e0006c; transform: scale(1.02); }
-        .btn-blue { background: var(--blue); text-shadow: 0 0 5px rgba(0, 240, 255, 0.5); color: black;}
-        .btn-blue:hover { background: #00c2cc; }
-        .btn-secondary { background: #121216; color: #fff; border: 1px solid var(--border); }
-        .btn-secondary:hover { background: #1c1c24; }
+        .btn:hover { background: #00cc6a; transform: translateY(-1px); }
+        .btn-secondary { background: #27272a; color: white; border: 1px solid var(--border); }
+        .btn-secondary:hover { background: #3f3f46; }
 
-        input {
-            width: 100%; padding: 12px; margin: 10px 0; background: #000;
-            border: 1px solid var(--border); color: white; border-radius: 8px;
-            text-align: center; font-size: 1.1rem; box-sizing: border-box; outline: none;
+        .settings-grid {
+            text-align: left; display: flex; flex-direction: column; gap: 12px; margin: 20px 0;
         }
-        input:focus { border-color: var(--blue); }
-
-        /* Viewport do Screenshare */
-        #viewport {
-            display: none; width: 100vw; height: 100vh;
-            position: fixed; inset: 0; z-index: 10; background: black;
-            flex-direction: column; justify-content: center; align-items: center;
+        .settings-item { display: flex; flex-direction: column; gap: 4px; }
+        .settings-item label { font-size: 0.75rem; color: #a1a1aa; text-transform: uppercase; font-weight: bold; }
+        .settings-item input, .settings-item select {
+            background: #09090b; border: 1px solid var(--border); color: white;
+            padding: 8px 12px; border-radius: 6px; outline: none;
         }
 
-        #remote-screen {
-            max-width: 100%; max-height: 80%; object-fit: contain;
-            border: 1px solid var(--border);
+        .dashboard-row { display: flex; gap: 10px; margin-top: 15px; }
+        .status-indicator {
+            padding: 10px; border-radius: 6px; background: #09090b;
+            border: 1px solid var(--border); font-size: 0.85rem; font-weight: bold;
+            display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 15px;
         }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: red; }
+        .dot.online { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
 
-        .controls-row { display: flex; gap: 15px; margin-top: 15px; width: 90%; max-width: 600px; }
-
-        .loader {
-            border: 4px solid #f3f3f3; border-top: 4px solid var(--blue);
-            border-radius: 50%; width: 40px; height: 40px;
-            animation: spin 1s linear infinite; margin: 20px auto;
+        .how-to-use-box {
+            text-align: left; max-height: 400px; overflow-y: auto; padding: 10px;
         }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .code-box {
+            background: #000; padding: 10px; border-radius: 6px; border: 1px solid var(--border);
+            font-family: monospace; font-size: 0.8rem; margin: 10px 0; overflow-x: auto; white-space: pre;
+        }
     </style>
 </head>
 <body>
 
-    <!-- Passo 0: Buffering Inicial -->
     <div id="overlay-sync" class="overlay">
-        <div class="card" style="border-color: var(--blue);">
-            <div class="loader"></div>
-            <h3>Hold up, we're connecting you to our server checking your data...</h3>
-            <div style="font-size:0.8rem; color:#666;">Establishing pipeline with EzBridge...</div>
+        <div class="card" style="border-color: var(--border);">
+            <h3 style="margin-bottom: 20px;">Hold up, we're connecting you to our server checking your data...</h3>
+            <div style="font-size:0.8rem; color:#71717a;">Please wait, establishing secure pipeline.</div>
         </div>
     </div>
 
-    <!-- Passo 1: Menu Principal -->
-    <div id="overlay-menu" class="overlay" style="display:none;">
-        <div class="card" style="width:340px;">
-            <h2 style="color: var(--accent); text-shadow: 0 0 10px rgba(255, 0, 127, 0.4);">Troll Sleep System</h2>
-            <p style="font-size: 0.85rem; color:#888; line-height: 1.4; margin-bottom: 20px;">
-                Welcome to my random app, where you can troll me with loud audios while i sleep!
-            </p>
-            <button class="btn btn-blue" onclick="openCreateRoomModal()">Create Room</button>
-            <button class="btn" onclick="openFindRoomModal()">Find Room</button>
-        </div>
-    </div>
-
-    <!-- Passo 1.5: Popup Criar Sala -->
-    <div id="modal-create" class="overlay" style="display:none;">
+    <div id="overlay-captcha" class="overlay" style="display:none;">
         <div class="card">
-            <h3>Set Room Password</h3>
-            <input type="number" id="create-password" placeholder="4 Digit Password (ex: 1221)" maxlength="4" oninput="limitLength(this, 4)">
-            <button class="btn btn-blue" onclick="createRoomSubmit()">Create & Share</button>
-            <button class="btn btn-secondary" onclick="closeModals()">Cancel</button>
+            <h1>EzBridge</h1>
+            <div style="display: flex; justify-content: center; margin-bottom: 20px;">
+                <div class="g-recaptcha" data-sitekey="6Lf8VTMtAAAAAAMXrs6lk-tLBjuW0u8ZV5LevzMz" data-callback="captchaSolved"></div>
+            </div>
         </div>
     </div>
 
-    <!-- Passo 1.6: Popup Achar Sala -->
-    <div id="modal-find" class="overlay" style="display:none;">
+    <div id="overlay-start" class="overlay" style="display:none;">
         <div class="card">
-            <h3>Enter Room Password</h3>
-            <input type="number" id="find-password" placeholder="4 Digit Password" maxlength="4" oninput="limitLength(this, 4)">
-            <button class="btn" onclick="joinRoomSubmit()">Join Room</button>
-            <button class="btn btn-secondary" onclick="closeModals()">Cancel</button>
+            <h1>EzBridge</h1>
+            <p style="color:#a1a1aa; font-size:0.9rem; margin-bottom:25px;">Create and implement a server to your apps for free!</p>
+            <button class="btn" onclick="openSetupUI()">[CLICK HERE TO BEGIN]</button>
         </div>
     </div>
 
-    <!-- Tela do Host Ativo (Sua Transmissão) -->
-    <div id="screen-hosting" class="overlay" style="display:none;">
-        <div class="card">
-            <h2 style="color: var(--blue);">ROOM ACTIVE</h2>
-            <div style="font-size: 2.2rem; font-weight: bold; color: var(--accent); margin: 15px 0;" id="room-code-display">----</div>
-            <p style="font-size:0.85rem; color:#888;">Streaming screen with audio at 20 FPS (480p).</p>
-            <button class="btn btn-secondary" onclick="location.reload()">Wipe & Close Room</button>
+    <div id="overlay-setup" class="overlay" style="display:none;">
+        <div class="card" style="max-width: 500px;">
+            <h2 id="setup-title">Setup Your Server</h2>
+            <div class="settings-grid">
+                <h4 style="margin:0; color:var(--accent);">[PING SETTINGS]</h4>
+                <div class="settings-item">
+                    <label>client target ping (10 - 1000ms)</label>
+                    <input type="number" id="cfg-client-ping" value="50">
+                </div>
+                <div class="settings-item">
+                    <label>your server's target ping (10 - 500ms)</label>
+                    <input type="number" id="cfg-server-ping" value="10">
+                </div>
+                <div class="settings-item">
+                    <label>max requests per second (1 - 60)</label>
+                    <input type="number" id="cfg-max-reqs" value="60">
+                </div>
+                <h4 style="margin:10px 0 0 0; color:var(--accent);">[SAFETY SETTINGS]</h4>
+                <div class="settings-item">
+                    <label>anti ddos / attack protection</label>
+                    <select id="cfg-anti-ddos">
+                        <option value="true" selected>On</option>
+                        <option value="false">Off</option>
+                    </select>
+                </div>
+                <div class="settings-item">
+                    <label>ratelimiting (bandwidth controller)</label>
+                    <select id="cfg-ratelimit">
+                        <option value="false" selected>Off</option>
+                        <option value="true">On</option>
+                    </select>
+                </div>
+                <div class="settings-item">
+                    <label>request validation (exploiting protection)</label>
+                    <select id="cfg-validation">
+                        <option value="true" selected>On</option>
+                        <option value="false">Off</option>
+                    </select>
+                </div>
+                <div class="settings-item">
+                    <label>server reading (payload checking)</label>
+                    <select id="cfg-reading">
+                        <option value="true" selected>On</option>
+                        <option value="false">Off</option>
+                    </select>
+                </div>
+                <div class="settings-item">
+                    <label>allow use on private projects</label>
+                    <select id="cfg-private">
+                        <option value="false" selected>Off</option>
+                        <option value="true">On</option>
+                    </select>
+                </div>
+            </div>
+            <button class="btn" id="setup-action-btn" onclick="createServerSubmit()">[CREATE SERVER]</button>
+            <button class="btn btn-secondary" onclick="closeSetupUI()">Cancel</button>
         </div>
     </div>
 
-    <!-- Passo 2: Viewport do Amigo (Client View) -->
-    <div id="viewport">
-        <h3 id="client-room-title" style="margin-bottom: 10px; font-size: 1rem;">Room: ----</h3>
-        <img id="remote-screen" draggable="false" src="">
-        <div class="controls-row">
-            <button class="btn btn-secondary" onclick="location.reload()">Leave</button>
-            <button class="btn" onclick="openTrollModal()">Play Audio</button>
+    <div id="dashboard" class="card" style="display:none; width: 450px;">
+        <h2>EzBridge Control</h2>
+        <div class="status-indicator">
+            <div id="server-dot" class="dot"></div>
+            <span>Server status: <span id="server-status-text">OFFLINE</span></span>
+        </div>
+        <div class="dashboard-row">
+            <button class="btn" style="flex: 1;" onclick="toggleServerState()">[Start/Stop Server]</button>
+            <button class="btn btn-secondary" style="width: 50px;" onclick="openEditSettings()">⚙</button>
+        </div>
+        <div class="dashboard-row">
+            <button class="btn btn-secondary" style="flex: 1;" onclick="openHowToUse()">[How to Use]</button>
+            <button class="btn btn-secondary" style="flex: 1;" id="test-conn-btn" onclick="testConnection()">[Test Connection]</button>
         </div>
     </div>
 
-    <!-- Passo 2.5: Modal de Opções de Trollagem (Play Audio) -->
-    <div id="modal-troll" class="overlay" style="display:none;">
-        <div class="card">
-            <h3>How would you like to play your audio?</h3>
-            <p style="font-size: 0.75rem; color: #888; margin-bottom: 20px;">[Note that only 15s of your audio or url will be played]</p>
-            <button class="btn btn-blue" onclick="openYoutubeFlow()">Via YouTube URL</button>
-            <button class="btn" onclick="openFileFlow()">Via Audio File</button>
-            <button class="btn btn-secondary" onclick="closeTrollModal()">Cancel</button>
+    <div id="modal-howto" class="overlay" style="display:none;">
+        <div class="card" style="max-width: 600px;">
+            <h3 style="margin-bottom:15px;">How to Connect Your Server</h3>
+            <div class="how-to-use-box">
+                <div class="setup-group">
+                    <label>1. Server Auth Key</label>
+                    <div style="display:flex; gap:10px;">
+                        <input type="text" id="copy-key" readonly style="flex-grow:1; background:#000; border:1px solid var(--border); color:#fff; padding:5px;">
+                        <button class="btn" style="width:auto; margin:0;" onclick="copyText('copy-key')">Copy</button>
+                    </div>
+                </div>
+                <div class="setup-group" style="margin-top:10px;">
+                    <label>2. Current Cloudflare Link</label>
+                    <div style="display:flex; gap:10px;">
+                        <input type="text" id="copy-link" readonly style="flex-grow:1; background:#000; border:1px solid var(--border); color:#fff; padding:5px;">
+                        <button class="btn" style="width:auto; margin:0;" onclick="copyText('copy-link')">Copy</button>
+                    </div>
+                </div>
+                <div style="display:flex; gap:10px; margin-top:15px;">
+                    <button class="btn btn-blue" onclick="openCommandsModal()">[API Commands]</button>
+                    <button class="btn" onclick="openTicTacToeCode()">[View Tic-Tac-Toe Code]</button>
+                </div>
+            </div>
+            <button class="btn btn-secondary" onclick="closeHowToUse()">Close</button>
         </div>
     </div>
 
-    <!-- Fluxo YouTube -->
-    <div id="modal-yt" class="overlay" style="display:none;">
-        <div class="card">
-            <h3>Paste YouTube Video Link</h3>
-            <input type="text" id="yt-url" placeholder="https://www.youtube.com/watch?v=...">
-            <button class="btn btn-blue" onclick="sendYoutubeAudio()">Send to Host</button>
-            <button class="btn btn-secondary" onclick="backToTrollModal()">Back</button>
+    <!-- Novo Modal de Comandos da API -->
+    <div id="modal-commands" class="overlay" style="display:none;">
+        <div class="card" style="max-width: 650px;">
+            <h3>EzBridge API Commands</h3>
+            <div class="how-to-use-box">
+                <h4 style="color:var(--accent);">Real-Time Events</h4>
+                <p style="font-size:0.8rem; color:#888;">Envie pacotes sincronizados para os outros clientes conectados:</p>
+                <div class="code-box">socket.emit("RemoteEvent", { type: "seu_tipo", data: "sua_payload" });</div>
+
+                <h4 style="color:var(--accent); margin-top:15px;">EBstorage Commands (Database)</h4>
+                <p style="font-size:0.8rem; color:#888;">Persistência física em disco direto no servidor virtual:</p>
+                
+                <p style="font-size:0.85rem; font-weight:bold;">1. Adicionar/Atualizar Dado:</p>
+                <div class="code-box">socket.emit("RemoteEvent", { type: "ebdata_add_pasta_subpasta_chave", data: "valor_ou_base64" });</div>
+                
+                <p style="font-size:0.85rem; font-weight:bold;">2. Recuperar Dado:</p>
+                <div class="code-box">socket.emit("RemoteEvent", { type: "ebdata_fetch_pasta_subpasta" });</div>
+
+                <p style="font-size:0.85rem; font-weight:bold;">3. Remover Dado:</p>
+                <div class="code-box">socket.emit("RemoteEvent", { type: "ebdata_remove_pasta_subpasta_chave" });</div>
+
+                <p style="font-size:0.85rem; font-weight:bold;">4. Criar Pasta de Organização:</p>
+                <div class="code-box">socket.emit("RemoteEvent", { type: "ebdata_addfolder", data: { folderName: "sua_pasta" } });</div>
+
+                <p style="font-size:0.85rem; font-weight:bold;">5. Limpar Tudo:</p>
+                <div class="code-box">socket.emit("RemoteEvent", { type: "ebdata_clear" });</div>
+            </div>
+            <button class="btn btn-secondary" onclick="closeCommandsModal()">Back</button>
         </div>
     </div>
 
-    <!-- Fluxo Arquivo Físico -->
-    <div id="modal-file" class="overlay" style="display:none;">
-        <div class="card">
-            <h3>Upload Audio File</h3>
-            <p style="font-size:0.75rem; color:#666; margin-bottom:10px;">Supports: .mp3, .wav, .ogg</p>
-            <input type="file" id="audio-upload" accept="audio/mp3, audio/wav, audio/ogg">
-            <button class="btn" onclick="sendUploadedAudio()">Send to Host</button>
-            <button class="btn btn-secondary" onclick="backToTrollModal()">Back</button>
+    <div id="modal-code" class="overlay" style="display:none;">
+        <div class="card" style="max-width: 700px;">
+            <h3>Tic-Tac-Toe Example Code</h3>
+            <textarea id="example-code" class="code-box" readonly rows="12" style="width:100%; border:none; height:300px; resize:none;"></textarea>
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <button class="btn" onclick="copyText('example-code')">Copy Code</button>
+                <button class="btn btn-secondary" onclick="closeTicTacToeCode()">Back</button>
+            </div>
         </div>
     </div>
 
 <script>
-    const TUNNEL = "https://yang-bears-paperbacks-throat.trycloudflare.com";
-    const VIRTUAL_SERVER_KEY = "66817a1a06";
-    
-    const socket = io(TUNNEL, { auth: { token: "default_key" } });
+    // --- LINK ATUALIZADO DO SEU MASTER TÚNEL ---
+    const PUBLIC_TUNNEL_URL = "https://ssl-loves-comic-percent.trycloudflare.com";
 
-    let myRoom = "";
-    let isHost = false;
-    let bgWorker = null;
+    let ownerId = getCookie("eb_owner_id") || "";
+    let serverKey = "";
+    let serverActive = false;
+    let serverSettings = {};
 
-    // --- CONEXÃO INICIAL ---
+    let socket = io(PUBLIC_TUNNEL_URL, {
+        auth: { token: "default_key" },
+        transports: ['websocket']
+    });
+
     socket.on('connect', () => {
+        socket.emit('eb_sync_session', { ownerId });
+    });
+
+    socket.on('session_verified', (data) => {
+        ownerId = data.ownerId;
+        setCookie("eb_owner_id", ownerId, 365);
         document.getElementById('overlay-sync').style.display = 'none';
-        document.getElementById('overlay-menu').style.display = 'flex';
-        socket.emit('join_virtual_server', { key: VIRTUAL_SERVER_KEY });
-    });
 
-    socket.on('connect_error', () => {
-        document.getElementById('overlay-sync').style.display = 'flex';
-        document.getElementById('overlay-menu').style.display = 'none';
-    });
-
-    // --- RECEBER SCREENSYNC ---
-    socket.on('RemoteEvent', (packet) => {
-        if (!isHost && packet.type === 'sh_frame' && packet.room === myRoom) {
-            document.getElementById('remote-screen').src = packet.img;
-        }
-        if (packet.type === 'close_room' && packet.room === myRoom) {
-            alert("The room was wiped by the host.");
-            location.reload();
+        if (data.hasServer) {
+            serverKey = data.server.key;
+            serverActive = data.server.active;
+            serverSettings = data.server.settings;
+            showDashboard();
+        } else {
+            document.getElementById('overlay-captcha').style.display = 'flex';
         }
     });
 
-    // --- CONTROLES DE INTERFACE (MODALS) ---
-    function limitLength(input, max) {
-        if (input.value.length > max) input.value = input.value.slice(0, max);
-    }
-    function openCreateRoomModal() { document.getElementById('modal-create').style.display = 'flex'; }
-    function openFindRoomModal() { document.getElementById('modal-find').style.display = 'flex'; }
-    function closeModals() {
-        document.getElementById('modal-create').style.display = 'none';
-        document.getElementById('modal-find').style.display = 'none';
-    }
-    function openTrollModal() { document.getElementById('modal-troll').style.display = 'flex'; }
-    function closeTrollModal() { document.getElementById('modal-troll').style.display = 'none'; }
-    function openYoutubeFlow() {
-        document.getElementById('modal-troll').style.display = 'none';
-        document.getElementById('modal-yt').style.display = 'flex';
-    }
-    function openFileFlow() {
-        document.getElementById('modal-troll').style.display = 'none';
-        document.getElementById('modal-file').style.display = 'flex';
-    }
-    function backToTrollModal() {
-        document.getElementById('modal-yt').style.display = 'none';
-        document.getElementById('modal-file').style.display = 'none';
-        document.getElementById('modal-troll').style.display = 'flex';
+    function captchaSolved() {
+        document.getElementById('overlay-captcha').style.display = 'none';
+        document.getElementById('overlay-start').style.display = 'flex';
     }
 
-    // --- HOST FLOW (Create Room) ---
-    async function createRoomSubmit() {
-        const pass = document.getElementById('create-password').value;
-        if (pass.length !== 4) return alert("Password must be exactly 4 digits.");
-        
-        myRoom = pass;
-        isHost = true;
-        closeModals();
-
-        try {
-            const stream = await navigator.mediaDevices.getDisplayMedia({
-                video: { width: 854, height: 480, frameRate: 20 },
-                audio: true
-            });
-
-            document.getElementById('overlay-menu').style.display = 'none';
-            document.getElementById('screen-hosting').style.display = 'flex';
-            document.getElementById('room-code-display').innerText = myRoom;
-
-            const video = document.createElement('video');
-            video.srcObject = stream;
-            video.play();
-
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-
-            const workerCode = `
-                let timer = null;
-                self.onmessage = function(e) {
-                    if (e.data.cmd === 'start') {
-                        clearInterval(timer);
-                        timer = setInterval(() => self.postMessage('tick'), e.data.interval);
-                    } else if (e.data.cmd === 'stop') {
-                        clearInterval(timer);
-                    }
-                };
-            `;
-            const workerBlob = new Blob([workerCode], {type: 'application/javascript'});
-            bgWorker = new Worker(URL.createObjectURL(workerBlob));
-            
-            bgWorker.onmessage = function() {
-                if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                    canvas.width = 854;
-                    canvas.height = 480;
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    
-                    socket.emit('RemoteEvent', {
-                        type: 'sh_frame',
-                        room: myRoom,
-                        img: canvas.toDataURL('image/jpeg', 0.45)
-                    });
-                }
-            };
-
-            bgWorker.postMessage({ cmd: 'start', interval: 1000 / 20 });
-
-            stream.getVideoTracks()[0].onended = () => {
-                socket.emit('RemoteEvent', { type: 'close_room', room: myRoom });
-                location.reload();
-            };
-
-        } catch (e) {
-            alert("Error starting screenshare: " + e.message);
-            location.reload();
-        }
+    function openSetupUI() {
+        document.getElementById('overlay-start').style.display = 'none';
+        document.getElementById('overlay-setup').style.display = 'flex';
     }
 
-    // --- CLIENT FLOW (Find Room) ---
-    function joinRoomSubmit() {
-        const pass = document.getElementById('find-password').value;
-        if (pass.length !== 4) return alert("Password must be exactly 4 digits.");
-        
-        myRoom = pass;
-        isHost = false;
-        closeModals();
-
-        document.getElementById('overlay-menu').style.display = 'none';
-        document.getElementById('viewport').style.display = 'flex';
-        document.getElementById('client-room-title').innerText = `Room: ${myRoom}`;
+    function closeSetupUI() {
+        document.getElementById('overlay-setup').style.display = 'none';
+        if (serverKey) showDashboard();
+        else document.getElementById('overlay-start').style.display = 'flex';
     }
 
-    // --- ENVIO DE ÁUDIOS ---
-    function sendYoutubeAudio() {
-        const url = document.getElementById('yt-url').value.trim();
-        if (!url) return alert("Please enter a YouTube link.");
-
-        socket.emit('RemoteEvent', {
-            type: 'play_youtube',
-            room: myRoom,
-            url: url
-        });
-
-        alert("Request sent to host's PC!");
-        document.getElementById('yt-url').value = "";
-        document.getElementById('modal-yt').style.display = 'none';
-    }
-
-    function sendUploadedAudio() {
-        const fileInput = document.getElementById('audio-upload');
-        if (fileInput.files.length === 0) return alert("Please select an audio file.");
-
-        const file = fileInput.files[0];
-        const reader = new FileReader();
-
-        reader.onload = function(e) {
-            socket.emit('RemoteEvent', {
-                type: 'play_audio_file',
-                room: myRoom,
-                data: e.target.result
-            });
-            alert("Audio file sent to host's PC!");
-            fileInput.value = "";
-            document.getElementById('modal-file').style.display = 'none';
+    function createServerSubmit() {
+        const settings = {
+            clientPing: parseInt(document.getElementById('cfg-client-ping').value) || 50,
+            serverPing: parseInt(document.getElementById('cfg-server-ping').value) || 10,
+            maxReqs: parseInt(document.getElementById('cfg-max-reqs').value) || 60,
+            antiDdos: document.getElementById('cfg-anti-ddos').value === 'true',
+            rateLimit: document.getElementById('cfg-ratelimit').value === 'true',
+            validation: document.getElementById('cfg-validation').value === 'true',
+            serverReading: document.getElementById('cfg-reading').value === 'true',
+            allowPrivate: document.getElementById('cfg-private').value === 'true'
         };
 
-        reader.readAsDataURL(file);
+        if (serverKey) {
+            if (confirm("Are you sure? Server settings override will disconnect currently active clients.")) {
+                socket.emit('eb_save_settings', { key: serverKey, ownerId, settings });
+            }
+        } else {
+            socket.emit('eb_create_server', { ownerId, settings });
+        }
+    }
+
+    socket.on('server_created', (data) => {
+        serverKey = data.key;
+        serverSettings = data.settings;
+        serverActive = false;
+        document.getElementById('overlay-setup').style.display = 'none';
+        showDashboard();
+    });
+
+    socket.on('settings_saved', () => {
+        serverActive = false;
+        document.getElementById('overlay-setup').style.display = 'none';
+        showDashboard();
+    });
+
+    function showDashboard() {
+        document.getElementById('dashboard').style.display = 'block';
+        updateStatusDisplay();
+    }
+
+    function toggleServerState() {
+        serverActive = !serverActive;
+        socket.emit('eb_toggle_server', { key: serverKey, ownerId, state: serverActive });
+        updateStatusDisplay();
+    }
+
+    function updateStatusDisplay() {
+        const dot = document.getElementById('server-dot');
+        const text = document.getElementById('server-status-text');
+        if (serverActive) {
+            dot.classList.add('online');
+            text.innerText = "ONLINE";
+        } else {
+            dot.classList.remove('online');
+            text.innerText = "OFFLINE";
+        }
+    }
+
+    function openEditSettings() {
+        document.getElementById('dashboard').style.display = 'none';
+        document.getElementById('overlay-setup').style.display = 'flex';
+        document.getElementById('cfg-client-ping').value = serverSettings.clientPing;
+        document.getElementById('cfg-server-ping').value = serverSettings.serverPing;
+        document.getElementById('cfg-max-reqs').value = serverSettings.maxReqs;
+        document.getElementById('cfg-anti-ddos').value = String(serverSettings.antiDdos);
+        document.getElementById('cfg-ratelimit').value = String(serverSettings.rateLimit);
+        document.getElementById('cfg-validation').value = String(serverSettings.validation);
+        document.getElementById('cfg-reading').value = String(serverSettings.serverReading);
+        document.getElementById('cfg-private').value = String(serverSettings.allowPrivate);
+    }
+
+    function testConnection() {
+        const btn = document.getElementById('test-conn-btn');
+        btn.disabled = true;
+        btn.innerText = "Testing...";
+        const startTime = Date.now();
+        socket.once('ebgetstatus_response', (data) => {
+            alert(`${data.status}\nping: ${Date.now() - startTime}ms`);
+            btn.disabled = false;
+            btn.innerText = "[Test Connection]";
+        });
+        socket.emit('ebgetstatus');
+    }
+
+    function openHowToUse() {
+        document.getElementById('copy-key').value = serverKey;
+        document.getElementById('copy-link').value = PUBLIC_TUNNEL_URL;
+        document.getElementById('modal-howto').style.display = 'flex';
+    }
+
+    function closeHowToUse() {
+        document.getElementById('modal-howto').style.display = 'none';
+    }
+
+    function openCommandsModal() {
+        document.getElementById('modal-commands').style.display = 'flex';
+    }
+
+    function closeCommandsModal() {
+        document.getElementById('modal-commands').style.display = 'none';
+    }
+
+    function openTicTacToeCode() {
+        const code = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Tic-Tac-Toe</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"><\/script>
+    <style>
+        body { background: #0c0c0e; color: #fff; font-family: sans-serif; text-align: center; }
+        .grid { display: grid; grid-template-columns: repeat(3, 100px); gap: 8px; justify-content: center; margin-top: 20px; }
+        .cell { width: 100px; height: 100px; background: #1e1e24; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; cursor: pointer; border-radius: 8px; }
+        #status { font-weight: bold; margin-top: 20px; color: #00ff88; }
+    </style>
+</head>
+<body>
+    <h2>Tic-Tac-Toe</h2>
+    <div id="status">Connecting...</div>
+    <div class="grid" id="grid">
+        <div class="cell" onclick="makeMove(0)"></div>
+        <div class="cell" onclick="makeMove(1)"></div>
+        <div class="cell" onclick="makeMove(2)"></div>
+        <div class="cell" onclick="makeMove(3)"></div>
+        <div class="cell" onclick="makeMove(4)"></div>
+        <div class="cell" onclick="makeMove(5)"></div>
+        <div class="cell" onclick="makeMove(6)"></div>
+        <div class="cell" onclick="makeMove(7)"></div>
+        <div class="cell" onclick="makeMove(8)"></div>
+    </div>
+
+    <script>
+        const key = "${serverKey}";
+        const link = "${PUBLIC_TUNNEL_URL}";
+        const socket = io(link, { auth: { token: "default_key" } });
+        let board = Array(9).fill("");
+        let myTurn = false;
+        let symbol = "X";
+
+        socket.on("connect", () => {
+            document.getElementById("status").innerText = "Connected! Waiting opponent.";
+            socket.emit("join_virtual_server", { key });
+        });
+
+        socket.on("joined_successfully", () => {
+            socket.emit("RemoteEvent", { type: "ttt_ping" });
+        });
+
+        socket.on("RemoteEvent", (packet) => {
+            if (packet.type === "ttt_ping") {
+                symbol = "O";
+                socket.emit("RemoteEvent", { type: "ttt_pong" });
+                startGame(true);
+            }
+            if (packet.type === "ttt_pong") {
+                symbol = "X";
+                startGame(false);
+            }
+            if (packet.type === "move") {
+                board[packet.idx] = packet.symbol;
+                updateBoard();
+                if (checkWinner()) {
+                    document.getElementById("status").innerText = "Opponent Won!";
+                    resetDelayed();
+                } else if (!board.includes("")) {
+                    document.getElementById("status").innerText = "Tie!";
+                    resetDelayed();
+                } else {
+                    myTurn = true;
+                    document.getElementById("status").innerText = "Your Turn (" + symbol + ")";
+                }
+            }
+        });
+
+        function startGame(turn) {
+            myTurn = turn;
+            document.getElementById("status").innerText = myTurn ? "Your Turn (" + symbol + ")" : "Opponent Turn...";
+        }
+
+        function makeMove(idx) {
+            if (!myTurn || board[idx] !== "") return;
+            board[idx] = symbol;
+            updateBoard();
+            myTurn = false;
+            document.getElementById("status").innerText = "Opponent Turn...";
+            socket.emit("RemoteEvent", { type: "move", idx, symbol });
+
+            if (checkWinner()) {
+                document.getElementById("status").innerText = "You Won!";
+                resetDelayed();
+            } else if (!board.includes("")) {
+                document.getElementById("status").innerText = "Tie!";
+                resetDelayed();
+            }
+        }
+
+        function updateBoard() {
+            const cells = document.querySelectorAll(".cell");
+            cells.forEach((c, i) => c.innerText = board[i]);
+        }
+
+        function checkWinner() {
+            const wins = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+            return wins.some(([a,b,c]) => board[a] && board[a] === board[b] && board[a] === board[c]);
+        }
+
+        function resetDelayed() {
+            myTurn = false;
+            setTimeout(() => {
+                board = Array(9).fill("");
+                updateBoard();
+                socket.emit("RemoteEvent", { type: "ttt_ping" });
+            }, 3000);
+        }
+    <\/script>
+</body>
+</html>`;
+        document.getElementById('example-code').value = code;
+        document.getElementById('modal-code').style.display = 'flex';
+    }
+
+    function closeTicTacToeCode() {
+        document.getElementById('modal-code').style.display = 'none';
+    }
+
+    function copyText(id) {
+        const el = document.getElementById(id);
+        el.select();
+        document.execCommand('copy');
+        alert("Copied!");
+    }
+
+    function setCookie(name, value, days) {
+        const d = new Date();
+        d.setTime(d.getTime() + (days*24*60*60*1000));
+        let expires = "expires="+ d.toUTCString();
+        document.cookie = name + "=" + value + ";" + expires + ";path=/";
+    }
+
+    function getCookie(name) {
+        let nameEQ = name + "=";
+        let ca = document.cookie.split(';');
+        for(let i=0;i < ca.length;i++) {
+            let c = ca[i];
+            while (c.charAt(0)==' ') c = c.substring(1,c.length);
+            if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
+        }
+        return null;
     }
 </script>
 </body>
