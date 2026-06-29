@@ -74,10 +74,6 @@
             width: 0%; height: 100%; background: var(--accent);
             transition: width 0.1s ease;
         }
-        .progress-text {
-            position: absolute; inset: 0; display: flex; align-items: center;
-            justify-content: center; font-size: 0.75rem; font-weight: bold;
-        }
 
         /* Viewport do Screenshare */
         #viewport {
@@ -191,6 +187,7 @@
     </div>
 
 <script>
+    // --- CREDENCIAIS ENVIADAS ---
     const TUNNEL = "https://ssl-loves-comic-percent.trycloudflare.com";
     const VIRTUAL_SERVER_KEY = "13c25d9dae";
     
@@ -206,7 +203,7 @@
     let isTrollPlaying = false;
 
     // Gerenciador de Chunks de Upload
-    const CHUNK_SIZE = 100 * 1024; // 100KB chunks para não estourar os limites do server (15 reqs/s)
+    const CHUNK_SIZE = 100 * 1024; 
     let currentUploadFile = null;
     const pendingReceives = {};
 
@@ -232,32 +229,19 @@
         socket.emit('join_virtual_server', { key: VIRTUAL_SERVER_KEY });
     });
 
-    socket.on('joined_successfully', () => {
-        addLog("Validação concluída! Chave aceita.");
-        addLog("Acessando painel de controle...");
-        setTimeout(() => {
-            document.getElementById('overlay-sync').style.display = 'none';
-            document.getElementById('overlay-menu').style.display = 'flex';
-        }, 800);
-    });
-
-    socket.on('join_error', (data) => {
-        addLog(`❌ ERRO: ${data.error}`);
-    });
-
     socket.on('connect_error', () => {
         addLog("⚠️ Erro de conexão com o túnel. Tentando reconectar...");
         document.getElementById('overlay-sync').style.display = 'flex';
         document.getElementById('overlay-menu').style.display = 'none';
     });
 
-    // --- RECEBER SCREENSYNC, CHUNKS & VOZ ---
+    // --- RECEBER SCREENSYNC & VOZ DO HOST ---
     socket.on('RemoteEvent', (packet) => {
         if (!isHost && packet.type === 'sh_frame' && packet.room === myRoom) {
             document.getElementById('remote-screen').src = packet.img;
         }
         
-        // Ouvir o Host falando no Microfone
+        // Sincronização de Voz (Ouvir o Host falando no Microfone)
         if (!isHost && packet.type === 'host_voice' && packet.room === myRoom) {
             playQueuedAudio(packet.id, packet.audio);
         }
@@ -278,9 +262,17 @@
         }
     });
 
-    // --- REPRODUTOR DE VOZ (AUDIO QUEUE) ---
+    // --- REPRODUTOR DE VOZ SEM LAG (GARGALO DE FILA RESOLVIDO) ---
     function playQueuedAudio(userId, audioData) {
         if (!remoteAudioQueues[userId]) remoteAudioQueues[userId] = { queue: [], playing: false };
+        
+        // CORREÇÃO CRÍTICA: Se a fila acumular mais de 2 blocos de áudio (~1 segundo de lag),
+        // limpa tudo e deixa apenas o pedaço de voz mais recente para forçar resincronização instantânea.
+        if (remoteAudioQueues[userId].queue.length > 2) {
+            console.warn("[Voice Watchdog] Descartando pacotes atrasados para eliminar lag acumulado.");
+            remoteAudioQueues[userId].queue = [];
+        }
+
         remoteAudioQueues[userId].queue.push(audioData);
         if (!remoteAudioQueues[userId].playing) processAudioQueue(userId);
     }
@@ -319,16 +311,16 @@
         document.getElementById('modal-troll').style.display = 'flex';
     }
 
-    // --- TRANSMISSÃO DE VOZ DO HOST COM RESINCRONIZAÇÃO A CADA 10S ---
+    // --- TRANSMISSÃO DE VOZ DO HOST (MICROFONE) COM ALOCAÇÃO LIMPA ---
     async function startHostMic() {
         try {
             micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             setupMicRecorder();
 
-            // Resincronização Periódica de 10 segundos
+            // Resincronização periódica de 10 segundos
             micInterval = setInterval(() => {
                 if (isHost && micRecorder && micRecorder.state === "recording") {
-                    micRecorder.stop(); // Dispara ondataavailable final e reinicia no onstop
+                    micRecorder.stop(); 
                 }
             }, 10000);
 
@@ -358,10 +350,11 @@
 
         micRecorder.onstop = () => {
             if (isHost && micStream && micStream.active) {
-                setupMicRecorder(); // Abre um novo barramento limpo e reinicia
+                setupMicRecorder(); // Abre um novo gravador limpo sem travar o buffer do navegador
             }
         };
 
+        // Reduzi para 500ms para manter a voz leve no upload sem atrasar
         micRecorder.start();
     }
 
@@ -421,6 +414,7 @@
 
             bgWorker.postMessage({ cmd: 'start', interval: 1000 / 20 });
 
+            // Inicia o microfone do Host simultaneamente
             startHostMic();
 
             stream.getVideoTracks()[0].onended = () => {
@@ -455,7 +449,7 @@
 
         const file = fileInput.files[0];
         
-        // Proteção Física de Tamanho de Arquivo (Bloqueio em 5MB)
+        // Limite de 5MB
         if (file.size > 5 * 1024 * 1024) {
             return alert("File exceeds 5MB size limit! Choose a lighter file.");
         }
@@ -508,7 +502,7 @@
 
         if (nextIndex < currentUploadFile.total) {
             updateUploadProgress(nextIndex, currentUploadFile.total);
-            sendChunk(nextIndex); // Envia o próximo pedaço sequencial
+            sendChunk(nextIndex); 
         } else {
             // Envio 100% Concluído
             document.getElementById('upload-progress-container').style.display = 'none';
@@ -520,16 +514,6 @@
         }
     }
 
-    function updateUploadProgress(current, total) {
-        const pct = Math.floor((current / total) * 100);
-        // Atualizações visuais se necessário
-    }
-
-    function handleStorageCommand(packet) {
-        // Obsoleto neste fluxo
-    }
-
-    // --- RECEPTOR HOST (Montagem e Tocar com Limite de 15s) ---
     function handleIncomingChunk(packet) {
         const { fileId, index, total, data } = packet;
 
@@ -543,7 +527,7 @@
         // Atualiza a barra de progresso do Host
         const receivedCount = pendingReceives[fileId].filter(c => c !== null).length;
         const pct = Math.floor((receivedCount / total) * 100);
-        document.getElementById('host-progress-bar').style.style = `width: ${pct}%`;
+        document.getElementById('host-progress-bar').style.width = `${pct}%`;
         document.getElementById('host-progress-val').innerText = pct;
 
         // Envia confirmação (ACK) para o cliente enviar o próximo chunk
@@ -586,7 +570,7 @@
             audio.remove();
             console.log("[Troll] Audio cortado após limite estrito de 15s.");
             isTrollPlaying = false;
-            playNextTrollAudio(); // Toca o próximo na fila
+            playNextTrollAudio(); 
         }, 15000);
 
         audio.onended = () => {
