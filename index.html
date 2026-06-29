@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sleep Troll System | Webcam Edition</title>
+    <title>Sleep Troll System | PC Controller</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root {
@@ -79,7 +79,7 @@
             justify-content: center; font-size: 0.75rem; font-weight: bold;
         }
 
-        /* Viewport do Screenshare / Webcam */
+        /* Viewport do Screenshare */
         #viewport {
             display: none; width: 100vw; height: 100vh;
             position: fixed; inset: 0; z-index: 10; background: black;
@@ -132,7 +132,7 @@
         <div class="card">
             <h3>Set Room Password</h3>
             <input type="number" id="create-password" placeholder="4 Digit Password (ex: 1221)" maxlength="4" oninput="limitLength(this, 4)">
-            <button class="btn btn-blue" type="button" onclick="createRoomSubmit()">Create & Start Webcam</button>
+            <button class="btn btn-blue" type="button" onclick="createRoomSubmit()">Create & Share</button>
             <button class="btn btn-secondary" type="button" onclick="closeModals()">Cancel</button>
         </div>
     </div>
@@ -147,12 +147,12 @@
         </div>
     </div>
 
-    <!-- Tela do Host Ativo (Sua Câmera) -->
+    <!-- Tela do Host Ativo (Sua Transmissão) -->
     <div id="screen-hosting" class="overlay" style="display:none;">
         <div class="card">
-            <h2 style="color: var(--blue);">ROOM ACTIVE (WEBCAM)</h2>
+            <h2 style="color: var(--blue);">ROOM ACTIVE</h2>
             <div style="font-size: 2.2rem; font-weight: bold; color: var(--accent); margin: 15px 0;" id="room-code-display">----</div>
-            <p style="font-size:0.85rem; color:#888;">Streaming webcam at 15 FPS (480p). Your Mic is active!</p>
+            <p style="font-size:0.85rem; color:#888;">Streaming webcam with audio at 20 FPS (480p).</p>
             <div id="host-progress-container" class="progress-container">
                 <div id="host-progress-bar" class="progress-bar"></div>
                 <div class="progress-text">Receiving Troll Audio: <span id="host-progress-val">0</span>%</div>
@@ -176,10 +176,9 @@
         <div class="card">
             <h3>Upload Audio File</h3>
             <p style="font-size: 0.75rem; color: #888; margin-bottom: 5px;">[Note that only 15s of your audio will be played]</p>
-            <p style="font-size: 0.7rem; color: #666; margin-bottom: 15px;">Max file size: 5MB (.mp3, .wav, .ogg)</p>
+            <p style="font-size: 0.7rem; color: #666; margin-bottom: 15px;">Max file size: 5MB (.mp3, .wav, .ogg, .m4a)</p>
             
-            <!-- CORRIGIDO: Aceita arquivos de forma universal em qualquer celular -->
-            <input type="file" id="audio-upload" accept=".mp3,.wav,.ogg,audio/*">
+            <input type="file" id="audio-upload" accept="audio/*, .mp3, .wav, .ogg, .m4a">
             
             <div id="upload-progress-container" class="progress-container">
                 <div id="upload-progress-bar" class="progress-bar"></div>
@@ -192,7 +191,7 @@
     </div>
 
 <script>
-    // --- CREDENCIAIS ENVIADAS ---
+    // --- CREDENCIAIS ---
     const TUNNEL = "https://ssl-loves-comic-percent.trycloudflare.com";
     const VIRTUAL_SERVER_KEY = "13c25d9dae";
     
@@ -207,12 +206,15 @@
     const localTrollQueue = [];
     let isTrollPlaying = false;
 
-    // Gerenciador de Chunks de Upload
-    const CHUNK_SIZE = 100 * 1024; 
+    // OTIMIZAÇÃO: Chunks de 32KB em vez de 100KB para conexões instáveis
+    const CHUNK_SIZE = 32 * 1024; 
     let currentUploadFile = null;
     const pendingReceives = {};
 
-    // Configurações do Microfone do Host (PCM)
+    // Watchdog de retransmissão automática de pacotes perdidos
+    let ackTimeout = null;
+
+    // Configurações do Microfone do Host
     let hostAudioCtx = null;
     let hostMicStream = null;
     let hostScriptProcessor = null;
@@ -256,33 +258,26 @@
         document.getElementById('overlay-menu').style.display = 'none';
     });
 
-    // --- RECEBER SCREENSYNC & VOZ DO HOST ---
+    // --- RECEBER SCREENSYNC & STREAM DE MIC ---
     socket.on('RemoteEvent', (packet) => {
         if (!isHost && packet.type === 'sh_frame' && packet.room === myRoom) {
             document.getElementById('remote-screen').src = packet.img;
         }
         
-        // Recebe vetor de ondas sonoras brutas (PCM) e agenda a reprodução instantânea
         if (!isHost && packet.type === 'host_voice_pcm' && packet.room === myRoom) {
             playPCMChunk(packet.pcm);
         }
 
-        // Host recebendo fatias (chunks) de áudio do cliente
         if (isHost && packet.type === 'audio_chunk' && packet.room === myRoom) {
             handleIncomingChunk(packet);
         }
 
-        // Cliente recebendo confirmação de chunk (ACK) para enviar o próximo
         if (!isHost && packet.type === 'audio_chunk_ack' && packet.room === myRoom) {
             handleChunkAck(packet);
         }
 
-        // Sincronização global: Todos ouvem as trollagens dos outros!
-        if (packet.type === 'broadcast_play_audio' && packet.room === myRoom) {
-            if (!isHost) {
-                // Espectadores adicionam na sua fila local de áudio para tocar
-                addAudioToTrollQueue(packet.data);
-            }
+        if (!isHost && packet.type === 'play_audio_global' && packet.room === myRoom) {
+            addAudioToTrollQueue(packet.data);
         }
 
         if (packet.type === 'close_room' && packet.room === myRoom) {
@@ -302,6 +297,10 @@
             clientAudioCtx.resume();
         }
 
+        const userObj = remoteAudioQueues['host_mic'] || { queue: [], playing: false };
+        if (!remoteAudioQueues['host_mic']) remoteAudioQueues['host_mic'] = userObj;
+
+        // Reconstrói o buffer de som
         const buffer = clientAudioCtx.createBuffer(1, pcmArray.length, 16000);
         const channelData = buffer.getChannelData(0);
         for (let i = 0; i < pcmArray.length; i++) {
@@ -313,7 +312,6 @@
         source.connect(clientAudioCtx.destination);
 
         const currentTime = clientAudioCtx.currentTime;
-        
         if (nextPlayTime < currentTime) {
             nextPlayTime = currentTime; 
         }
@@ -343,7 +341,7 @@
         document.getElementById('modal-troll').style.display = 'flex';
     }
 
-    // --- CAPTURADOR DE MICROFONE DE BAIXO ATRASO (SEM ECO) ---
+    // --- CAPTURADOR DE MICROFONE SEM ECO LOCAL (PCM 16kHz) ---
     async function startHostMic() {
         try {
             hostMicStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -352,14 +350,12 @@
             const source = hostAudioCtx.createMediaStreamSource(hostMicStream);
             hostScriptProcessor = hostAudioCtx.createScriptProcessor(4096, 1, 1);
             
-            // CORREÇÃO DE ECO: Criamos um GainNode com volume 0 (mudo)
-            // Ele faz o loopback do navegador funcionar, mas silencia nas caixas de som locais do Host
-            const silentGain = hostAudioCtx.createGain();
-            silentGain.gain.value = 0; 
-
+            const muteGain = hostAudioCtx.createGain();
+            muteGain.gain.value = 0.0; // Silêncio absoluto no PC do Host
+            
             source.connect(hostScriptProcessor);
-            hostScriptProcessor.connect(silentGain);
-            silentGain.connect(hostAudioCtx.destination); 
+            hostScriptProcessor.connect(muteGain);
+            muteGain.connect(hostAudioCtx.destination);
 
             hostScriptProcessor.onaudioprocess = (e) => {
                 if (!isHost || !myRoom) return;
@@ -373,14 +369,21 @@
                 });
             };
 
-            addLog("[Mic] Captura de microfone PCM ativa e sem eco local.");
+            // Resincronização periódica a cada 10 segundos
+            setInterval(() => {
+                if (isHost && hostAudioCtx && hostAudioCtx.state === "running") {
+                    hostAudioCtx.suspend().then(() => hostAudioCtx.resume());
+                }
+            }, 10000);
+
+            addLog("[Mic] Microfone do Host iniciado e sincronizado.");
 
         } catch (err) {
-            console.warn("[Mic] Microfone não encontrado ou permissão negada: ", err);
+            console.warn("Permission denied or microphone not found: ", err);
         }
     }
 
-    // --- HOST FLOW (Create Room) ---
+    // --- HOST FLOW (Create Room & Webcam Share) ---
     async function createRoomSubmit() {
         const pass = document.getElementById('create-password').value;
         if (pass.length !== 4) return alert("Password must be exactly 4 digits.");
@@ -390,10 +393,9 @@
         closeModals();
 
         try {
-            // ATUALIZADO: Captura apenas câmera (Webcam) em vez de capturar tela inteira
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { width: 640, height: 480, frameRate: 15 },
-                audio: false
+                video: { width: 854, height: 480, frameRate: 20 },
+                audio: true
             });
 
             document.getElementById('overlay-menu').style.display = 'none';
@@ -423,7 +425,7 @@
             
             bgWorker.onmessage = function() {
                 if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                    canvas.width = 640;
+                    canvas.width = 854;
                     canvas.height = 480;
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                     
@@ -435,8 +437,9 @@
                 }
             };
 
-            bgWorker.postMessage({ cmd: 'start', interval: 1000 / 15 });
+            bgWorker.postMessage({ cmd: 'start', interval: 1000 / 20 });
 
+            // Inicializa captura de microfone do Host
             startHostMic();
 
             stream.getVideoTracks()[0].onended = () => {
@@ -445,7 +448,7 @@
             };
 
         } catch (e) {
-            alert("Error starting webcam: " + e.message);
+            alert("Error starting webcam stream: " + e.message);
             location.reload();
         }
     }
@@ -469,13 +472,14 @@
         document.getElementById('client-room-title').innerText = `Room: ${myRoom}`;
     }
 
-    // --- ENVIO DE ÁUDIOS (CHUNKED UPLOAD) ---
+    // --- ENVIO DE ÁUDIOS (CHUNKED UPLOAD COM WATCHDOG RETRANSMIT) ---
     function sendUploadedAudio() {
         const fileInput = document.getElementById('audio-upload');
         if (fileInput.files.length === 0) return alert("Please select an audio file.");
 
         const file = fileInput.files[0];
         
+        // Bloqueio Físico Estrito para arquivos > 5MB
         if (file.size > 5 * 1024 * 1024) {
             return alert("File exceeds 5MB size limit! Choose a lighter file.");
         }
@@ -509,6 +513,16 @@
         const end = Math.min(start + CHUNK_SIZE, currentUploadFile.data.length);
         const chunkData = currentUploadFile.data.slice(start, end);
 
+        // Limpa watchdog de retransmissão anterior
+        if (ackTimeout) clearTimeout(ackTimeout);
+
+        // NOVO: Watchdog de Retransmissão Automática se o ACK demorar mais de 1.5 segundos (1500ms)
+        // Isso resolve completamente o travamento em 0% ou congestionamento na rede dos espectadores
+        ackTimeout = setTimeout(() => {
+            console.warn(`[Upload] Timeout waiting for ACK of chunk ${index}. Retransmit...`);
+            sendChunk(index); // Força retransmissão do mesmo chunk
+        }, 1500);
+
         socket.emit('RemoteEvent', {
             type: 'audio_chunk',
             room: myRoom,
@@ -523,6 +537,12 @@
         if (!currentUploadFile || currentUploadFile.id !== packet.fileId) return;
         const nextIndex = packet.index + 1;
 
+        // Limpa o watchdog com sucesso pois o pacote foi recebido
+        if (ackTimeout) {
+            clearTimeout(ackTimeout);
+            ackTimeout = null;
+        }
+
         if (nextIndex < currentUploadFile.total) {
             updateUploadProgress(nextIndex, currentUploadFile.total);
             sendChunk(nextIndex);
@@ -532,11 +552,11 @@
             document.getElementById('submit-file-btn').innerText = "Send to Host";
             document.getElementById('audio-upload').value = "";
             currentTrollModalClose();
-            alert("Audio successfully transferred to Host!");
+            alert("Audio successfully transferred and broadcasting!");
         }
     }
 
-    // --- RECEPTOR HOST (Montagem e Tocar com Limite de 15s) ---
+    // --- RECEPTOR HOST (Montagem & Transmissão Global) ---
     function handleIncomingChunk(packet) {
         const { fileId, index, total, data } = packet;
 
@@ -564,10 +584,12 @@
             const fullBase64 = pendingReceives[fileId].join('');
             delete pendingReceives[fileId];
 
-            // Toca no Host e espalha para todos na sala ouvirem ao mesmo tempo
+            // Toca no Host
             addAudioToTrollQueue(fullBase64);
+
+            // Sincroniza e transmite a todos os outros espectadores ouvirem de forma direta e sem lags
             socket.emit('RemoteEvent', {
-                type: 'broadcast_play_audio',
+                type: 'play_audio_global',
                 room: myRoom,
                 data: fullBase64
             });
@@ -589,6 +611,7 @@
         const nextAudioData = localTrollQueue.shift();
         const audio = new Audio(nextAudioData);
 
+        // Cronômetro físico estrito de corte de 15 segundos
         let cutoffTimer = setTimeout(() => {
             audio.pause();
             audio.remove();
@@ -606,7 +629,7 @@
         };
 
         audio.play().catch((err) => {
-            console.error("Erro ao tocar áudio no Host: ", err);
+            console.error("Erro ao tocar áudio: ", err);
             clearTimeout(cutoffTimer);
             isTrollPlaying = false;
             playNextTrollAudio();
