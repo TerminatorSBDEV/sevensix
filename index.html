@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sleep Troller | EzBridge App</title>
+    <title>Sleep Troll System | PC Controller</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root {
-            --bg: #09090b;
-            --panel: #18181b;
-            --border: #27272a;
-            --accent: #ff3366; /* Rosa neon para o troller */
-            --accent-green: #00ff88;
-            --text: #f4f4f5;
+            --bg: #030303;
+            --panel: #0d0d11;
+            --accent: #ff007f; /* Rosa Neon */
+            --blue: #00f0ff; /* Azul Neon */
+            --border: #1a1a24;
+            --text: #ffffff;
         }
 
         body, html {
@@ -22,35 +22,41 @@
             overflow: hidden; touch-action: none; user-select: none;
         }
 
-        /* Telas */
-        .screen {
+        /* Buffer Screen */
+        .overlay {
+            position: fixed; inset: 0; background: var(--bg);
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            height: 100vh; position: fixed; inset: 0; z-index: 100; background: var(--bg);
+            z-index: 2000; transition: 0.3s;
         }
 
-        .box {
-            background: var(--panel); border: 1px solid var(--border); padding: 30px;
-            border-radius: 12px; text-align: center; width: 320px;
-            box-shadow: 0 10px 35px rgba(0,0,0,0.8);
+        .card {
+            background: var(--panel); border: 2px solid var(--border); padding: 35px;
+            border-radius: 16px; text-align: center; width: 320px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
         }
+
+        h1, h2, h3 { color: var(--blue); margin-top: 0; text-shadow: 0 0 10px rgba(0, 240, 255, 0.4); }
 
         .btn {
-            width: 100%; padding: 12px; margin: 10px 0; background: var(--accent);
-            border: none; color: white; font-weight: bold; border-radius: 6px;
-            cursor: pointer; transition: 0.2s; font-size: 0.95rem;
+            width: 100%; padding: 14px; margin: 10px 0; background: var(--accent);
+            border: none; color: white; font-weight: bold; border-radius: 8px;
+            cursor: pointer; transition: 0.2s; font-size: 1rem;
+            text-shadow: 0 0 5px rgba(255, 0, 127, 0.5);
         }
-        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
-        .btn-green { background: var(--accent-green); color: black; }
-        .btn-secondary { background: #27272a; color: white; border: 1px solid var(--border); }
-        .btn-secondary:hover { background: #3f3f46; }
+        .btn:hover { background: #e0006c; transform: scale(1.02); }
+        .btn-blue { background: var(--blue); text-shadow: 0 0 5px rgba(0, 240, 255, 0.5); color: black;}
+        .btn-blue:hover { background: #00c2cc; }
+        .btn-secondary { background: #121216; color: #fff; border: 1px solid var(--border); }
+        .btn-secondary:hover { background: #1c1c24; }
 
         input {
-            width: 100%; padding: 10px; margin: 10px 0; background: #000;
-            border: 1px solid var(--border); color: white; border-radius: 6px;
+            width: 100%; padding: 12px; margin: 10px 0; background: #000;
+            border: 1px solid var(--border); color: white; border-radius: 8px;
             text-align: center; font-size: 1.1rem; box-sizing: border-box; outline: none;
         }
+        input:focus { border-color: var(--blue); }
 
-        /* Viewport da Transmissão */
+        /* Viewport do Screenshare */
         #viewport {
             display: none; width: 100vw; height: 100vh;
             position: fixed; inset: 0; z-index: 10; background: black;
@@ -59,147 +65,192 @@
 
         #remote-screen {
             max-width: 100%; max-height: 80%; object-fit: contain;
+            border: 1px solid var(--border);
         }
 
-        .control-bar {
-            display: flex; gap: 15px; width: 90%; max-width: 500px; margin-top: 15px;
-        }
+        .controls-row { display: flex; gap: 15px; margin-top: 15px; width: 90%; max-width: 600px; }
 
-        /* Modais Extras */
-        .modal {
-            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9);
-            z-index: 1000; align-items: center; justify-content: center;
+        /* Loader de Transmissão */
+        .loader {
+            border: 4px solid #f3f3f3; border-top: 4px solid var(--blue);
+            border-radius: 50%; width: 40px; height: 40px;
+            animation: spin 1s linear infinite; margin: 20px auto;
         }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
 
-    <!-- Menu de Entrada -->
-    <div id="screen-entrance" class="screen">
-        <div class="box" style="width: 350px;">
-            <h2 style="color: var(--accent); margin-bottom: 5px;">Sleep Troller</h2>
-            <p style="font-size: 0.8rem; color:#888; margin-bottom: 20px; line-height: 1.4;">
+    <!-- Passo 0: Buffering Inicial de Conexão -->
+    <div id="overlay-sync" class="overlay">
+        <div class="card" style="border-color: var(--blue);">
+            <div class="loader"></div>
+            <h3>Hold up, we're connecting you to our server checking your data...</h3>
+            <div style="font-size:0.8rem; color:#666;">Establishing pipeline with EzBridge...</div>
+        </div>
+    </div>
+
+    <!-- Passo 1: Menu Principal -->
+    <div id="overlay-menu" class="overlay" style="display:none;">
+        <div class="card" style="width:340px;">
+            <h2 style="color: var(--accent); text-shadow: 0 0 10px rgba(255, 0, 127, 0.4);">Troll Sleep System</h2>
+            <p style="font-size: 0.85rem; color:#888; line-height: 1.4; margin-bottom: 20px;">
                 Welcome to my random app, where you can troll me with loud audios while i sleep!
             </p>
-            <button class="btn btn-green" onclick="createRoomPrompt()">Create Room</button>
-            <button class="btn" onclick="findRoomPrompt()">Find Room</button>
+            <button class="btn btn-blue" onclick="openCreateRoomModal()">Create Room</button>
+            <button class="btn" onclick="openFindRoomModal()">Find Room</button>
         </div>
     </div>
 
-    <!-- Tela do Host Ativo -->
-    <div id="screen-hosting" class="screen" style="display:none;">
-        <div class="box">
-            <h3 style="color: var(--accent-green);">ROOM IS ACTIVE</h3>
-            <div style="font-size: 2.2rem; font-weight: bold; letter-spacing: 4px; margin: 15px 0;" id="room-code-display">----</div>
-            <p style="font-size:0.8rem; color:#888; line-height: 1.4; text-align: left;">
-                1. Mande este código de 4 dígitos para os trolls.<br>
-                2. Baixe o arquivo <b>ytvd.py</b>.<br>
-                3. Execute no PC e insira este código para tocar os sons de forma invisível.
-            </p>
-            <button class="btn btn-secondary" onclick="location.reload()">[Close Room]</button>
+    <!-- Passo 1.5: Popup Criar Sala -->
+    <div id="modal-create" class="overlay" style="display:none;">
+        <div class="card">
+            <h3>Set Room Password</h3>
+            <input type="number" id="create-password" placeholder="4 Digit Password (ex: 1221)" maxlength="4" oninput="limitLength(this, 4)">
+            <button class="btn btn-blue" onclick="createRoomSubmit()">Create & Share</button>
+            <button class="btn btn-secondary" onclick="closeModals()">Cancel</button>
         </div>
     </div>
 
-    <!-- Viewport do Troll (Client View) -->
+    <!-- Passo 1.6: Popup Achar Sala -->
+    <div id="modal-find" class="overlay" style="display:none;">
+        <div class="card">
+            <h3>Enter Room Password</h3>
+            <input type="number" id="find-password" placeholder="4 Digit Password" maxlength="4" oninput="limitLength(this, 4)">
+            <button class="btn" onclick="joinRoomSubmit()">Join Room</button>
+            <button class="btn btn-secondary" onclick="closeModals()">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Tela do Host Ativo (Sua Transmissão) -->
+    <div id="screen-hosting" class="overlay" style="display:none;">
+        <div class="card">
+            <h2 style="color: var(--blue);">ROOM ACTIVE</h2>
+            <div style="font-size: 2.2rem; font-weight: bold; color: var(--accent); margin: 15px 0;" id="room-code-display">----</div>
+            <p style="font-size:0.85rem; color:#888;">Streaming screen with audio at 20 FPS (480p).</p>
+            <button class="btn btn-secondary" onclick="location.reload()">Wipe & Close Room</button>
+        </div>
+    </div>
+
+    <!-- Passo 2: Viewport do Amigo (Client View) -->
     <div id="viewport">
-        <img id="remote-screen" draggable="false">
-        <div class="control-bar">
-            <button class="btn btn-secondary" style="margin:0;" onclick="location.reload()">Leave</button>
-            <button class="btn" style="margin:0;" onclick="openTrollModal()">🔥 Play Audio</button>
+        <h3 id="client-room-title" style="margin-bottom: 10px; font-size: 1rem;">Room: ----</h3>
+        <img id="remote-screen" draggable="false" src="">
+        <div class="controls-row">
+            <button class="btn btn-secondary" onclick="location.reload()">Leave</button>
+            <button class="btn" onclick="openTrollModal()">Play Audio</button>
         </div>
     </div>
 
-    <!-- Modal Seleção de Áudio -->
-    <div id="modal-troll" class="modal">
-        <div class="card box">
-            <h3 style="margin-top:0;">How would you like to play your audio?</h3>
-            <p style="font-size:0.75rem; color:#888; margin-bottom: 15px;">[Note: only 15s of your audio or URL will be played]</p>
-            
-            <button class="btn btn-green" onclick="triggerFileInput()">Via Audio File</button>
-            <button class="btn" onclick="triggerYtInput()">Via YouTube URL</button>
+    <!-- Passo 2.5: Modal de Opções de Trollagem (Play Audio) -->
+    <div id="modal-troll" class="overlay" style="display:none;">
+        <div class="card">
+            <h3>How would you like to play your audio?</h3>
+            <p style="font-size: 0.75rem; color: #888; margin-bottom: 20px;">[Note that only 15s of your audio or url will be played]</p>
+            <button class="btn btn-blue" onclick="openYoutubeFlow()">Via YouTube URL</button>
+            <button class="btn" onclick="openFileFlow()">Via Audio File</button>
             <button class="btn btn-secondary" onclick="closeTrollModal()">Cancel</button>
-            
-            <input type="file" id="audio-file-input" accept="audio/*" style="display: none;" onchange="handleAudioUpload(this)">
+        </div>
+    </div>
+
+    <!-- Fluxo YouTube -->
+    <div id="modal-yt" class="overlay" style="display:none;">
+        <div class="card">
+            <h3>Paste YouTube Video Link</h3>
+            <input type="text" id="yt-url" placeholder="https://www.youtube.com/watch?v=...">
+            <button class="btn btn-blue" onclick="sendYoutubeAudio()">Send to Host</button>
+            <button class="btn btn-secondary" onclick="backToTrollModal()">Back</button>
+        </div>
+    </div>
+
+    <!-- Fluxo Arquivo Físico -->
+    <div id="modal-file" class="overlay" style="display:none;">
+        <div class="card">
+            <h3>Upload Audio File</h3>
+            <p style="font-size:0.75rem; color:#666; margin-bottom:10px;">Supports: .mp3, .wav, .ogg</p>
+            <input type="file" id="audio-upload" accept="audio/mp3, audio/wav, audio/ogg">
+            <button class="btn" onclick="sendUploadedAudio()">Send to Host</button>
+            <button class="btn btn-secondary" onclick="backToTrollModal()">Back</button>
         </div>
     </div>
 
 <script>
-    // --- CONEXÃO ATRAVÉS DO SEU EZBRIDGE ---
+    // --- CONEXÃO COM SEU EZBRIDGE ATUALIZADO ---
     const TUNNEL = "https://yang-bears-paperbacks-throat.trycloudflare.com";
-    const SERVER_KEY = "3mg40B4X8";
-    const socket = io(TUNNEL, { auth: { token: SERVER_KEY }, transports: ['websocket'] });
+    const VIRTUAL_SERVER_KEY = "66817a1a06";
+    
+    const socket = io(TUNNEL, { auth: { token: "default_key" }, transports: ['websocket'] });
 
     let myRoom = "";
     let isHost = false;
-    let lastFrameUrl = null;
+    let bgWorker = null;
 
+    // --- CONEXÃO INICIAL (BUFFER SCREEN BYPASS) ---
     socket.on('connect', () => {
-        // Conecta ao seu servidor virtual do Ezbridge
-        socket.emit('join_virtual_server', { key: SERVER_KEY });
+        document.getElementById('overlay-sync').style.display = 'none';
+        document.getElementById('overlay-menu').style.display = 'flex';
+        socket.emit('join_virtual_server', { key: VIRTUAL_SERVER_KEY });
     });
 
-    // --- RECEBER FRAMES (Gargalo de 1 FPS resolvido com Blob-Flush) ---
+    socket.on('connect_error', () => {
+        document.getElementById('overlay-sync').style.display = 'flex';
+        document.getElementById('overlay-menu').style.display = 'none';
+    });
+
+    // --- RECEBER SCREENSYNC ---
     socket.on('RemoteEvent', (packet) => {
-        if (packet.type === 'screen_frame' && packet.room === myRoom && !isHost) {
-            const imgElement = document.getElementById('remote-screen');
-            
-            if (lastFrameUrl) {
-                URL.revokeObjectURL(lastFrameUrl); // Força liberação instantânea de memória
-            }
-
-            const blob = dataURItoBlob(packet.img);
-            const objectUrl = URL.createObjectURL(blob);
-            
-            imgElement.src = objectUrl;
-            lastFrameUrl = objectUrl;
+        if (!isHost && packet.type === 'sh_frame' && packet.room === myRoom) {
+            document.getElementById('remote-screen').src = packet.img;
+        }
+        if (packet.type === 'close_room' && packet.room === myRoom) {
+            alert("The room was wiped by the host.");
+            location.reload();
         }
     });
 
-    // Converter Base64 em Blob de alta velocidade
-    function dataURItoBlob(dataURI) {
-        const byteString = atob(dataURI.split(',')[1]);
-        const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
-        const ab = new ArrayBuffer(byteString.length);
-        const ia = new Uint8Array(ab);
-        for (let i = 0; i < byteString.length; i++) {
-            ia[i] = byteString.charCodeAt(i);
-        }
-        return new Blob([ab], {type: mimeString});
+    // --- CONTROLES DE INTERFACE (MODALS) ---
+    function limitLength(input, max) {
+        if (input.value.length > max) input.value = input.value.slice(0, max);
+    }
+    function openCreateRoomModal() { document.getElementById('modal-create').style.display = 'flex'; }
+    function openFindRoomModal() { document.getElementById('modal-find').style.display = 'flex'; }
+    function closeModals() {
+        document.getElementById('modal-create').style.display = 'none';
+        document.getElementById('modal-find').style.display = 'none';
+    }
+    function openTrollModal() { document.getElementById('modal-troll').style.display = 'flex'; }
+    function closeTrollModal() { document.getElementById('modal-troll').style.display = 'none'; }
+    function openYoutubeFlow() {
+        document.getElementById('modal-troll').style.display = 'none';
+        document.getElementById('modal-yt').style.display = 'flex';
+    }
+    function openFileFlow() {
+        document.getElementById('modal-troll').style.display = 'none';
+        document.getElementById('modal-file').style.display = 'flex';
+    }
+    function backToTrollModal() {
+        document.getElementById('modal-yt').style.display = 'none';
+        document.getElementById('modal-file').style.display = 'none';
+        document.getElementById('modal-troll').style.display = 'flex';
     }
 
-    // --- PROMPTS DE ENTRADA ---
-    function createRoomPrompt() {
-        const pass = prompt("Defina uma senha numérica de 4 dígitos para a sala (ex: 1221):");
-        if (!pass || pass.length !== 4 || isNaN(pass)) {
-            return alert("Senha inválida! Deve ser exatamente 4 números.");
-        }
+    // --- HOST FLOW (Create Room) ---
+    async function createRoomSubmit() {
+        const pass = document.getElementById('create-password').value;
+        if (pass.length !== 4) return alert("Password must be exactly 4 digits.");
+        
         myRoom = pass;
         isHost = true;
-        initHostSharing();
-    }
+        closeModals();
 
-    function findRoomPrompt() {
-        const pass = prompt("Digite a senha de 4 dígitos da sala para entrar:");
-        if (!pass || pass.length !== 4) return;
-        myRoom = pass;
-        isHost = false;
-        
-        document.getElementById('screen-entrance').style.display = 'none';
-        document.getElementById('viewport').style.display = 'flex';
-    }
-
-    // --- TRANSMISSÃO DO HOST (480p - 20 FPS) ---
-    async function initHostSharing() {
         try {
+            // Captura tela com áudio (20 FPS, 480p)
             const stream = await navigator.mediaDevices.getDisplayMedia({
-                video: {
-                    width: { ideal: 854, max: 854 },
-                    height: { ideal: 480, max: 480 },
-                    frameRate: { ideal: 20, max: 20 } // 20 FPS
-                }
+                video: { width: 854, height: 480, frameRate: 20 },
+                audio: true
             });
 
-            document.getElementById('screen-entrance').style.display = 'none';
+            document.getElementById('overlay-menu').style.display = 'none';
             document.getElementById('screen-hosting').style.display = 'flex';
             document.getElementById('room-code-display').innerText = myRoom;
 
@@ -210,77 +261,97 @@
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
 
-            const sendInterval = setInterval(() => {
+            // Web Worker para manter os frames constantes a 20 FPS mesmo em segundo plano
+            const workerCode = `
+                let timer = null;
+                self.onmessage = function(e) {
+                    if (e.data.cmd === 'start') {
+                        clearInterval(timer);
+                        timer = setInterval(() => self.postMessage('tick'), e.data.interval);
+                    } else if (e.data.cmd === 'stop') {
+                        clearInterval(timer);
+                    }
+                };
+            `;
+            const workerBlob = new Blob([workerCode], {type: 'application/javascript'});
+            bgWorker = new Worker(URL.createObjectURL(workerBlob));
+            
+            bgWorker.onmessage = function() {
                 if (video.readyState === video.HAVE_ENOUGH_DATA) {
                     canvas.width = 854;
                     canvas.height = 480;
                     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                     
                     socket.emit('RemoteEvent', {
-                        type: 'screen_frame',
+                        type: 'sh_frame',
                         room: myRoom,
-                        img: canvas.toDataURL('image/jpeg', 0.4) // Comprime JPEG leve
+                        img: canvas.toDataURL('image/jpeg', 0.45)
                     });
                 }
-            }, 1000 / 20); // 20 FPS real-time
+            };
+
+            bgWorker.postMessage({ cmd: 'start', interval: 1000 / 20 });
 
             stream.getVideoTracks()[0].onended = () => {
-                clearInterval(sendInterval);
+                socket.emit('RemoteEvent', { type: 'close_room', room: myRoom });
                 location.reload();
             };
 
         } catch (e) {
-            alert("Screenshare error: " + e.message);
+            alert("Error starting screenshare: " + e.message);
+            location.reload();
         }
     }
 
-    // --- MODAL DE TROLL ---
-    function openTrollModal() {
-        document.getElementById('modal-troll').style.display = 'flex';
+    // --- CLIENT FLOW (Find Room) ---
+    function joinRoomSubmit() {
+        const pass = document.getElementById('find-password').value;
+        if (pass.length !== 4) return alert("Password must be exactly 4 digits.");
+        
+        myRoom = pass;
+        isHost = false;
+        closeModals();
+
+        document.getElementById('overlay-menu').style.display = 'none';
+        document.getElementById('viewport').style.display = 'flex';
+        document.getElementById('client-room-title').innerText = `Room: ${myRoom}`;
     }
 
-    function closeTrollModal() {
-        document.getElementById('modal-troll').style.display = 'none';
-    }
-
-    function triggerFileInput() {
-        document.getElementById('audio-file-input').click();
-    }
-
-    // 1. Enviar arquivo de áudio local para tocar no PC do Host
-    function handleAudioUpload(input) {
-        const file = input.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => {
-            const ext = file.name.split('.').pop();
-            socket.emit('RemoteEvent', {
-                type: 'troll_file',
-                room: myRoom,
-                data: reader.result,
-                ext: ext
-            });
-            alert("Áudio enviado! Tocarão até 15s no computador alvo.");
-            closeTrollModal();
-        };
-    }
-
-    // 2. Enviar Link do YouTube para tocar no PC do Host
-    function triggerYtInput() {
-        const url = prompt("Cole o link do vídeo do YouTube aqui:");
-        if (!url || !url.includes("youtube.com") && !url.includes("youtu.be")) {
-            return alert("Link inválido do YouTube!");
-        }
+    // --- ENVIO DE ÁUDIOS ---
+    function sendYoutubeAudio() {
+        const url = document.getElementById('yt-url').value.trim();
+        if (!url) return alert("Please enter a YouTube link.");
 
         socket.emit('RemoteEvent', {
-            type: 'troll_yt',
+            type: 'play_youtube',
             room: myRoom,
             url: url
         });
-        alert("Link enviado! O áudio do YouTube tocará de forma invisível por 15s.");
-        closeTrollModal();
+
+        alert("Request sent to host's PC!");
+        document.getElementById('yt-url').value = "";
+        document.getElementById('modal-yt').style.display = 'none';
+    }
+
+    function sendUploadedAudio() {
+        const fileInput = document.getElementById('audio-upload');
+        if (fileInput.files.length === 0) return alert("Please select an audio file.");
+
+        const file = fileInput.files[0];
+        const reader = new FileReader();
+
+        reader.onload = function(e) {
+            socket.emit('RemoteEvent', {
+                type: 'play_audio_file',
+                room: myRoom,
+                data: e.target.result
+            });
+            alert("Audio file sent to host's PC!");
+            fileInput.value = "";
+            document.getElementById('modal-file').style.display = 'none';
+        };
+
+        reader.readAsDataURL(file);
     }
 </script>
 </body>
