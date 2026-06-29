@@ -201,20 +201,12 @@
     let isHost = false;
     let bgWorker = null;
 
-    // Fila de reprodução de voz e áudios locais
-    const remoteAudioQueues = {};
     const localTrollQueue = [];
     let isTrollPlaying = false;
-
-    // OTIMIZAÇÃO: Chunks de 32KB em vez de 100KB para conexões instáveis
-    const CHUNK_SIZE = 32 * 1024; 
+    const CHUNK_SIZE = 100 * 1024; 
     let currentUploadFile = null;
     const pendingReceives = {};
 
-    // Watchdog de retransmissão automática de pacotes perdidos
-    let ackTimeout = null;
-
-    // Configurações do Microfone do Host
     let hostAudioCtx = null;
     let hostMicStream = null;
     let hostScriptProcessor = null;
@@ -258,7 +250,7 @@
         document.getElementById('overlay-menu').style.display = 'none';
     });
 
-    // --- RECEBER SCREENSYNC & STREAM DE MIC ---
+    // --- RECEBER SCREENSYNC, STREAM DE MIC & ÁUDIO GLOBAL ---
     socket.on('RemoteEvent', (packet) => {
         if (!isHost && packet.type === 'sh_frame' && packet.room === myRoom) {
             document.getElementById('remote-screen').src = packet.img;
@@ -297,10 +289,6 @@
             clientAudioCtx.resume();
         }
 
-        const userObj = remoteAudioQueues['host_mic'] || { queue: [], playing: false };
-        if (!remoteAudioQueues['host_mic']) remoteAudioQueues['host_mic'] = userObj;
-
-        // Reconstrói o buffer de som
         const buffer = clientAudioCtx.createBuffer(1, pcmArray.length, 16000);
         const channelData = buffer.getChannelData(0);
         for (let i = 0; i < pcmArray.length; i++) {
@@ -341,7 +329,7 @@
         document.getElementById('modal-troll').style.display = 'flex';
     }
 
-    // --- CAPTURADOR DE MICROFONE SEM ECO LOCAL (PCM 16kHz) ---
+    // --- CAPTURADOR DE MICROFONE SEM ECO LOCAL ---
     async function startHostMic() {
         try {
             hostMicStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -351,11 +339,11 @@
             hostScriptProcessor = hostAudioCtx.createScriptProcessor(4096, 1, 1);
             
             const muteGain = hostAudioCtx.createGain();
-            muteGain.gain.value = 0.0; // Silêncio absoluto no PC do Host
+            muteGain.gain.value = 0.0; 
             
             source.connect(hostScriptProcessor);
             hostScriptProcessor.connect(muteGain);
-            muteGain.connect(hostAudioCtx.destination);
+            muteGain.connect(hostAudioCtx.destination); 
 
             hostScriptProcessor.onaudioprocess = (e) => {
                 if (!isHost || !myRoom) return;
@@ -369,13 +357,6 @@
                 });
             };
 
-            // Resincronização periódica a cada 10 segundos
-            setInterval(() => {
-                if (isHost && hostAudioCtx && hostAudioCtx.state === "running") {
-                    hostAudioCtx.suspend().then(() => hostAudioCtx.resume());
-                }
-            }, 10000);
-
             addLog("[Mic] Microfone do Host iniciado e sincronizado.");
 
         } catch (err) {
@@ -383,7 +364,7 @@
         }
     }
 
-    // --- HOST FLOW (Create Room & Webcam Share) ---
+    // --- HOST FLOW (Create Room) ---
     async function createRoomSubmit() {
         const pass = document.getElementById('create-password').value;
         if (pass.length !== 4) return alert("Password must be exactly 4 digits.");
@@ -439,7 +420,6 @@
 
             bgWorker.postMessage({ cmd: 'start', interval: 1000 / 20 });
 
-            // Inicializa captura de microfone do Host
             startHostMic();
 
             stream.getVideoTracks()[0].onended = () => {
@@ -472,14 +452,13 @@
         document.getElementById('client-room-title').innerText = `Room: ${myRoom}`;
     }
 
-    // --- ENVIO DE ÁUDIOS (CHUNKED UPLOAD COM WATCHDOG RETRANSMIT) ---
+    // --- ENVIO DE ÁUDIOS (CHUNKED UPLOAD) ---
     function sendUploadedAudio() {
         const fileInput = document.getElementById('audio-upload');
         if (fileInput.files.length === 0) return alert("Please select an audio file.");
 
         const file = fileInput.files[0];
         
-        // Bloqueio Físico Estrito para arquivos > 5MB
         if (file.size > 5 * 1024 * 1024) {
             return alert("File exceeds 5MB size limit! Choose a lighter file.");
         }
@@ -513,16 +492,6 @@
         const end = Math.min(start + CHUNK_SIZE, currentUploadFile.data.length);
         const chunkData = currentUploadFile.data.slice(start, end);
 
-        // Limpa watchdog de retransmissão anterior
-        if (ackTimeout) clearTimeout(ackTimeout);
-
-        // NOVO: Watchdog de Retransmissão Automática se o ACK demorar mais de 1.5 segundos (1500ms)
-        // Isso resolve completamente o travamento em 0% ou congestionamento na rede dos espectadores
-        ackTimeout = setTimeout(() => {
-            console.warn(`[Upload] Timeout waiting for ACK of chunk ${index}. Retransmit...`);
-            sendChunk(index); // Força retransmissão do mesmo chunk
-        }, 1500);
-
         socket.emit('RemoteEvent', {
             type: 'audio_chunk',
             room: myRoom,
@@ -536,12 +505,6 @@
     function handleChunkAck(packet) {
         if (!currentUploadFile || currentUploadFile.id !== packet.fileId) return;
         const nextIndex = packet.index + 1;
-
-        // Limpa o watchdog com sucesso pois o pacote foi recebido
-        if (ackTimeout) {
-            clearTimeout(ackTimeout);
-            ackTimeout = null;
-        }
 
         if (nextIndex < currentUploadFile.total) {
             updateUploadProgress(nextIndex, currentUploadFile.total);
@@ -569,6 +532,8 @@
 
         const receivedCount = pendingReceives[fileId].filter(c => c !== null).length;
         const pct = Math.floor((receivedCount / total) * 100);
+        
+        // CORREGIDO: Trocado .style.style por .style.width para evitar travamento de renderização e perda de ACKs
         document.getElementById('host-progress-bar').style.width = `${pct}%`;
         document.getElementById('host-progress-val').innerText = pct;
 
@@ -584,10 +549,8 @@
             const fullBase64 = pendingReceives[fileId].join('');
             delete pendingReceives[fileId];
 
-            // Toca no Host
             addAudioToTrollQueue(fullBase64);
 
-            // Sincroniza e transmite a todos os outros espectadores ouvirem de forma direta e sem lags
             socket.emit('RemoteEvent', {
                 type: 'play_audio_global',
                 room: myRoom,
@@ -611,7 +574,7 @@
         const nextAudioData = localTrollQueue.shift();
         const audio = new Audio(nextAudioData);
 
-        // Cronômetro físico estrito de corte de 15 segundos
+        // Cronômetro de corte absoluto de 15 segundos
         let cutoffTimer = setTimeout(() => {
             audio.pause();
             audio.remove();
