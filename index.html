@@ -31,7 +31,7 @@
 
         .card {
             background: var(--panel); border: 2px solid var(--border); padding: 35px;
-            border-radius: 16px; text-align: center; width: 320px;
+            border-radius: 16px; text-align: center; width: 340px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.8);
         }
 
@@ -56,12 +56,12 @@
         }
         input:focus { border-color: var(--blue); }
 
-        /* Console de Logs Holográfico */
-        .terminal-box {
-            background: #000; border: 1px solid var(--border); border-radius: 8px;
-            padding: 12px; height: 130px; overflow-y: auto; text-align: left;
-            font-family: monospace; font-size: 0.75rem; color: var(--blue);
-            margin-top: 15px; line-height: 1.4;
+        /* Console de Logs no Buffering */
+        .log-console {
+            margin-top: 20px; background: #000; border: 1px solid var(--border);
+            border-radius: 8px; height: 100px; overflow-y: auto; text-align: left;
+            padding: 10px; font-family: monospace; font-size: 0.75rem; color: var(--accent);
+            width: 100%; box-sizing: border-box;
         }
 
         /* Viewport do Screenshare */
@@ -88,22 +88,15 @@
 </head>
 <body>
 
-    <!-- Passo 0: Buffering Inicial de Carregamento -->
+    <!-- Passo 0: Buffering Inicial com Console de Logs -->
     <div id="overlay-sync" class="overlay">
-        <div class="card" style="border-color: var(--blue);">
+        <div class="card" style="border-color: var(--blue); width:360px;">
             <div class="loader"></div>
             <h3>Hold up, we're connecting you to our server checking your data...</h3>
             <div style="font-size:0.8rem; color:#666;">Establishing pipeline with EzBridge...</div>
-        </div>
-    </div>
-
-    <!-- NOVO: Modal do Terminal de Logs em Tempo Real -->
-    <div id="overlay-status-log" class="overlay" style="display:none;">
-        <div class="card" style="border-color: var(--accent); width: 380px;">
-            <div class="loader" id="log-loader"></div>
-            <h3 id="log-title">Processing Request...</h3>
-            <div id="log-console" class="terminal-box"></div>
-            <button class="btn btn-secondary" id="log-cancel-btn" style="margin-top:15px; display:none;" onclick="cancelLogProcess()">Back</button>
+            <div id="log-box" class="log-console">
+                <div>[SYSTEM] Iniciar conexão Socket.io...</div>
+            </div>
         </div>
     </div>
 
@@ -139,7 +132,7 @@
         </div>
     </div>
 
-    <!-- Tela do Host Ativo (Sua Transmissão) -->
+    <!-- Tela do Host Ativo -->
     <div id="screen-hosting" class="overlay" style="display:none;">
         <div class="card">
             <h2 style="color: var(--blue);">ROOM ACTIVE</h2>
@@ -192,7 +185,7 @@
     </div>
 
 <script>
-    // --- CREDENCIAIS ---
+    // --- CREDENCIAIS ATUALIZADAS ---
     const TUNNEL = "https://ssl-loves-comic-percent.trycloudflare.com";
     const VIRTUAL_SERVER_KEY = "13c25d9dae";
     
@@ -201,52 +194,42 @@
     let myRoom = "";
     let isHost = false;
     let bgWorker = null;
-
-    // Fila de reprodução para a voz do Host
     const remoteAudioQueues = {};
 
-    // --- FUNÇÕES DE LOGS DO TERMINAL WEB ---
-    function clearLogs() {
-        document.getElementById('log-console').innerHTML = '';
-        document.getElementById('log-cancel-btn').style.display = 'none';
-        document.getElementById('log-loader').style.display = 'block';
-    }
-
-    function addLog(msg, isError) {
-        const consoleDiv = document.getElementById('log-console');
-        const line = document.createElement('div');
-        line.style.color = isError ? 'var(--accent)' : 'var(--blue)';
-        line.style.marginBottom = "4px";
-        line.innerText = `> ${msg}`;
-        consoleDiv.appendChild(line);
-        consoleDiv.scrollTop = consoleDiv.scrollHeight;
-    }
-
-    function showLogOverlay(title) {
-        clearLogs();
-        document.getElementById('log-title').innerText = title;
-        document.getElementById('overlay-status-log').style.display = 'flex';
-    }
-
-    function cancelLogProcess() {
-        document.getElementById('overlay-status-log').style.display = 'none';
-        document.getElementById('overlay-menu').style.display = 'flex';
-    }
-
-    function showLogError(msg) {
-        addLog(`[ERROR] ${msg}`, true);
-        document.getElementById('log-loader').style.display = 'none';
-        document.getElementById('log-cancel-btn').style.display = 'block';
+    // --- SISTEMA DE LOGS EM TEMPO REAL ---
+    function addLog(msg) {
+        const logBox = document.getElementById('log-box');
+        if (logBox) {
+            const time = new Date().toLocaleTimeString();
+            logBox.innerHTML += `<div>[${time}] ${msg}</div>`;
+            logBox.scrollTop = logBox.scrollHeight;
+        }
     }
 
     // --- CONEXÃO INICIAL ---
     socket.on('connect', () => {
-        document.getElementById('overlay-sync').style.display = 'none';
-        document.getElementById('overlay-menu').style.display = 'flex';
+        addLog("Conectado ao núcleo central do EzBridge.");
+        addLog("Solicitando validação de chave de servidor virtual...");
+        
         socket.emit('join_virtual_server', { key: VIRTUAL_SERVER_KEY });
     });
 
+    socket.on('joined_successfully', () => {
+        addLog("Validação concluída! Chave aceita.");
+        addLog("Acessando painel de controle...");
+        
+        setTimeout(() => {
+            document.getElementById('overlay-sync').style.display = 'none';
+            document.getElementById('overlay-menu').style.display = 'flex';
+        }, 800);
+    });
+
+    socket.on('join_error', (data) => {
+        addLog(`❌ ERRO: ${data.error}`);
+    });
+
     socket.on('connect_error', () => {
+        addLog("⚠️ Erro de conexão com o túnel. Tentando reconectar...");
         document.getElementById('overlay-sync').style.display = 'flex';
         document.getElementById('overlay-menu').style.display = 'none';
     });
@@ -257,7 +240,6 @@
             document.getElementById('remote-screen').src = packet.img;
         }
         
-        // Sincronização de Voz (Ouvir o Host)
         if (!isHost && packet.type === 'host_voice' && packet.room === myRoom) {
             playQueuedAudio(packet.id, packet.audio);
         }
@@ -292,8 +274,8 @@
     function limitLength(input, max) {
         if (input.value.length > max) input.value = input.value.slice(0, max);
     }
-    function openCreateRoomModal() { openModals(); document.getElementById('modal-create').style.display = 'flex'; }
-    function openFindRoomModal() { openModals(); document.getElementById('modal-find').style.display = 'flex'; }
+    function openCreateRoomModal() { document.getElementById('modal-create').style.display = 'flex'; }
+    function openFindRoomModal() { document.getElementById('modal-find').style.display = 'flex'; }
     function closeModals() {
         document.getElementById('modal-create').style.display = 'none';
         document.getElementById('modal-find').style.display = 'none';
@@ -317,10 +299,8 @@
     // --- TRANSMISSÃO DE VOZ DO HOST (MICROFONE) ---
     async function startHostMic() {
         try {
-            addLog("Requesting microphone stream permissions...");
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const mediaRecorder = new MediaRecorder(stream);
-            addLog("Microphone pipeline opened successfully.");
             
             mediaRecorder.ondataavailable = async (event) => {
                 if (event.data.size > 0 && isHost) {
@@ -343,7 +323,7 @@
             }, 400);
 
         } catch (err) {
-            addLog("Warning: Microphone not enabled or not found. Continuing without mic.");
+            console.warn("Permission denied or microphone not found: ", err);
         }
     }
 
@@ -355,18 +335,17 @@
         myRoom = pass;
         isHost = true;
         closeModals();
-        
-        showLogOverlay("Creating Secure Room...");
-        addLog("Sincronizando com o servidor EzBridge...");
 
         try {
-            addLog("Solicitando permissão de Captura de Tela...");
             const stream = await navigator.mediaDevices.getDisplayMedia({
                 video: { width: 854, height: 480, frameRate: 20 },
                 audio: true
             });
 
-            addLog("Captura de tela aceita. Configurando Canvas de Redimensionamento...");
+            document.getElementById('overlay-menu').style.display = 'none';
+            document.getElementById('screen-hosting').style.display = 'flex';
+            document.getElementById('room-code-display').innerText = myRoom;
+
             const video = document.createElement('video');
             video.srcObject = stream;
             video.play();
@@ -374,7 +353,6 @@
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
 
-            addLog("Iniciando Web Worker em segundo plano (20 FPS)...");
             const workerCode = `
                 let timer = null;
                 self.onmessage = function(e) {
@@ -405,16 +383,7 @@
 
             bgWorker.postMessage({ cmd: 'start', interval: 1000 / 20 });
 
-            // Ativa microfone do Host com tratamento de logs
-            await startHostMic();
-
-            addLog("Sala criada com sucesso! Sincronizando tela...");
-            taskDelay(1000, () => {
-                document.getElementById('overlay-status-log').style.display = 'none';
-                document.getElementById('overlay-menu').style.display = 'none';
-                document.getElementById('screen-hosting').style.display = 'flex';
-                document.getElementById('room-code-display').innerText = myRoom;
-            });
+            startHostMic();
 
             stream.getVideoTracks()[0].onended = () => {
                 socket.emit('RemoteEvent', { type: 'close_room', room: myRoom });
@@ -422,7 +391,8 @@
             };
 
         } catch (e) {
-            showLogError(`Screenshare cancelado ou erro: ${e.message}`);
+            alert("Error starting screenshare: " + e.message);
+            location.reload();
         }
     }
 
@@ -435,19 +405,9 @@
         isHost = false;
         closeModals();
 
-        showLogOverlay("Sincronizando com a Sala...");
-        addLog(`Conectando à sala secreta: ${myRoom}...`);
-
-        taskDelay(1500, () => {
-            document.getElementById('overlay-status-log').style.display = 'none';
-            document.getElementById('overlay-menu').style.display = 'none';
-            document.getElementById('viewport').style.display = 'flex';
-            document.getElementById('client-room-title').innerText = `Room: ${myRoom}`;
-        });
-    }
-
-    function taskDelay(ms, callback) {
-        setTimeout(callback, ms);
+        document.getElementById('overlay-menu').style.display = 'none';
+        document.getElementById('viewport').style.display = 'flex';
+        document.getElementById('client-room-title').innerText = `Room: ${myRoom}`;
     }
 
     // --- ENVIO DE ÁUDIOS ---
