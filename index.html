@@ -59,9 +59,9 @@
         /* Console de Logs no Buffering */
         .log-console {
             margin-top: 20px; background: #000; border: 1px solid var(--border);
-            border-radius: 8px; height: 100px; overflow-y: auto; padding: 10px;
-            font-size: 0.75rem; color: #00f0ff; text-align: left;
-            width: 100%; box-sizing: border-box; font-family: monospace;
+            border-radius: 8px; height: 100px; overflow-y: auto; text-align: left;
+            padding: 10px; font-family: monospace; font-size: 0.75rem; color: var(--accent);
+            width: 100%; box-sizing: border-box;
         }
 
         /* Barra de Progresso do Chunked Upload */
@@ -153,6 +153,10 @@
             <h2 style="color: var(--blue);">ROOM ACTIVE</h2>
             <div style="font-size: 2.2rem; font-weight: bold; color: var(--accent); margin: 15px 0;" id="room-code-display">----</div>
             <p style="font-size:0.85rem; color:#888;">Streaming screen with audio at 20 FPS (480p).</p>
+            <div id="host-progress-container" class="progress-container">
+                <div id="host-progress-bar" class="progress-bar"></div>
+                <div class="progress-text">Receiving Troll Audio: <span id="host-progress-val">0</span>%</div>
+            </div>
             <button class="btn btn-secondary" type="button" onclick="location.reload()">Wipe & Close Room</button>
         </div>
     </div>
@@ -170,32 +174,19 @@
     <!-- Passo 2.5: Modal de Opções de Trollagem (Play Audio) -->
     <div id="modal-troll" class="overlay" style="display:none;">
         <div class="card">
-            <h3>How would you like to play your audio?</h3>
-            <p style="font-size: 0.75rem; color: #888; margin-bottom: 20px;">[Note that only 15s of your audio or url will be played]</p>
-            <button class="btn btn-blue" type="button" onclick="openYoutubeFlow()">Via YouTube URL</button>
-            <button class="btn" type="button" onclick="openFileFlow()">Via Audio File</button>
-            <button class="btn btn-secondary" type="button" onclick="closeTrollModal()">Cancel</button>
-        </div>
-    </div>
-
-    <!-- Fluxo YouTube -->
-    <div id="modal-yt" class="overlay" style="display:none;">
-        <div class="card">
-            <h3>Paste YouTube Video Link</h3>
-            <input type="text" id="yt-url" placeholder="https://www.youtube.com/watch?v=...">
-            <button class="btn btn-blue" type="button" onclick="sendYoutubeAudio()">Send to Host</button>
-            <button class="btn btn-secondary" type="button" onclick="backToTrollModal()">Back</button>
-        </div>
-    </div>
-
-    <!-- Fluxo Arquivo Físico -->
-    <div id="modal-file" class="overlay" style="display:none;">
-        <div class="card">
             <h3>Upload Audio File</h3>
-            <p style="font-size:0.75rem; color:#666; margin-bottom:10px;">Supports: .mp3, .wav, .ogg</p>
+            <p style="font-size: 0.75rem; color: #888; margin-bottom: 5px;">[Note that only 15s of your audio will be played]</p>
+            <p style="font-size: 0.7rem; color: #666; margin-bottom: 15px;">Max file size: 5MB (.mp3, .wav, .ogg)</p>
+            
             <input type="file" id="audio-upload" accept="audio/mp3, audio/wav, audio/ogg">
-            <button class="btn" type="button" onclick="sendUploadedAudio()">Send to Host</button>
-            <button class="btn btn-secondary" type="button" onclick="backToTrollModal()">Back</button>
+            
+            <div id="upload-progress-container" class="progress-container">
+                <div id="upload-progress-bar" class="progress-bar"></div>
+                <div class="progress-text">Sending Chunks: <span id="upload-progress-val">0</span>%</div>
+            </div>
+
+            <button class="btn btn-blue" id="submit-file-btn" type="button" onclick="sendUploadedAudio()">Send to Host</button>
+            <button class="btn btn-secondary" type="button" onclick="closeTrollModal()">Cancel</button>
         </div>
     </div>
 
@@ -210,20 +201,20 @@
     let isHost = false;
     let bgWorker = null;
 
-    // Fila de reprodução de voz e áudios locais
-    const remoteAudioQueues = {};
+    // Fila de reprodução e gerenciador de chunks
     const localTrollQueue = [];
     let isTrollPlaying = false;
-
-    // Gerenciador de Chunks de Upload
-    const CHUNK_SIZE = 100 * 1024; // 100KB chunks
+    const CHUNK_SIZE = 100 * 1024; 
     let currentUploadFile = null;
     const pendingReceives = {};
 
-    // Configurações do Microfone do Host
-    let micStream = null;
-    let micRecorder = null;
-    let micInterval = null;
+    // --- NOVO SISTEMA DE MICROFONE DE ALTA PRECISÃO (PCM) ---
+    let hostAudioCtx = null;
+    let hostMicStream = null;
+    let hostScriptProcessor = null;
+
+    let clientAudioCtx = null;
+    let nextPlayTime = 0; // Ponteiro do relógio do chip de áudio do espectador
 
     // --- SISTEMA DE LOGS EM TEMPO REAL ---
     function addLog(msg) {
@@ -261,15 +252,23 @@
         document.getElementById('overlay-menu').style.display = 'none';
     });
 
-    // --- RECEBER SCREENSYNC & VOZ DO HOST ---
+    // --- RECEBER SCREENSYNC & STREAM DE MIC (PCM) ---
     socket.on('RemoteEvent', (packet) => {
         if (!isHost && packet.type === 'sh_frame' && packet.room === myRoom) {
             document.getElementById('remote-screen').src = packet.img;
         }
         
-        // CORREÇÃO: Sincronização do Microfone do Host com Flush Ativo
-        if (packet.type === 'host_voice' && !isHost && packet.room === myRoom) {
-            playQueuedAudio('host_mic', packet.data);
+        // Recebe vetor de ondas sonoras brutas (PCM) e agenda a reprodução instantânea
+        if (!isHost && packet.type === 'host_voice_pcm' && packet.room === myRoom) {
+            playPCMChunk(packet.pcm);
+        }
+
+        if (isHost && packet.type === 'audio_chunk' && packet.room === myRoom) {
+            handleIncomingChunk(packet);
+        }
+
+        if (!isHost && packet.type === 'audio_chunk_ack' && packet.room === myRoom) {
+            handleChunkAck(packet);
         }
 
         if (packet.type === 'close_room' && packet.room === myRoom) {
@@ -278,39 +277,38 @@
         }
     });
 
-    // --- GERENCIADOR DE REPRODUÇÃO DE VOZ (FLUSH ATIVO CONTRA DESINCRONIA) ---
-    function playQueuedAudio(userId, audioData) {
-        if (!remoteAudioQueues[userId]) {
-            remoteAudioQueues[userId] = { queue: [], playing: false };
-        }
-        
-        // CORREÇÃO CRÍTICA: Se a fila acumular mais de 2 pedaços de áudio (>800ms de lag),
-        // limpa o atraso acumulado e pula imediatamente para o som mais recente enviado pelo Host
-        if (remoteAudioQueues[userId].queue.length > 2) {
-            console.warn("[Mic] Limpando backlog para restaurar sincronia em tempo real...");
-            remoteAudioQueues[userId].queue = [];
-        }
-        
-        remoteAudioQueues[userId].queue.push(audioData);
-        if (!remoteAudioQueues[userId].playing) {
-            processAudioQueue(userId);
-        }
-    }
-
-    function processAudioQueue(userId) {
-        const userObj = remoteAudioQueues[userId];
-        if (userObj.queue.length === 0) {
-            userObj.playing = false;
-            return;
+    // --- NOVO REPRODUTOR DE ÁUDIO EM TEMPO REAL (SEM OVERHEAD/SEM LAG) ---
+    function playPCMChunk(pcmArray) {
+        if (!clientAudioCtx) {
+            clientAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+            nextPlayTime = clientAudioCtx.currentTime;
         }
 
-        userObj.playing = true;
-        const nextAudio = userObj.queue.shift();
-        const audio = new Audio(nextAudio);
+        if (clientAudioCtx.state === 'suspended') {
+            clientAudioCtx.resume();
+        }
+
+        // Reconstrói o buffer de som
+        const buffer = clientAudioCtx.createBuffer(1, pcmArray.length, 16000);
+        const channelData = buffer.getChannelData(0);
+        for (let i = 0; i < pcmArray.length; i++) {
+            channelData[i] = pcmArray[i];
+        }
+
+        const source = clientAudioCtx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(clientAudioCtx.destination);
+
+        const currentTime = clientAudioCtx.currentTime;
         
-        audio.onended = () => processAudioQueue(userId);
-        audio.onerror = () => processAudioQueue(userId);
-        audio.play().catch(() => processAudioQueue(userId));
+        // Mecanismo anti-delay: Se o relógio do espectador atrasar devido à oscilação da internet, 
+        // força o alinhamento instantâneo com a onda sonora mais recente enviada pelo Host
+        if (nextPlayTime < currentTime) {
+            nextPlayTime = currentTime; 
+        }
+
+        source.start(nextPlayTime);
+        nextPlayTime += buffer.duration; // Define o tempo exato em que o próximo pedaço deve encaixar
     }
 
     // --- CONTROLES DE INTERFACE (MODALS) ---
@@ -325,71 +323,47 @@
     }
     function openTrollModal() { document.getElementById('modal-troll').style.display = 'flex'; }
     function closeTrollModal() { document.getElementById('modal-troll').style.display = 'none'; }
-    function openYoutubeFlow() {
-        document.getElementById('modal-troll').style.display = 'none';
-        document.getElementById('modal-yt').style.display = 'flex';
-    }
     function openFileFlow() {
         document.getElementById('modal-troll').style.display = 'none';
         document.getElementById('modal-file').style.display = 'flex';
     }
     function backToTrollModal() {
-        document.getElementById('modal-yt').style.display = 'none';
         document.getElementById('modal-file').style.display = 'none';
         document.getElementById('modal-troll').style.display = 'flex';
     }
 
-    // --- HOST FLOW & MICROFONE DO HOST ---
+    // --- NOVO CAPTURADOR DE MICROFONE DE BAIXO ATRASO (PCM 16kHz) ---
     async function startHostMic() {
         try {
-            // Solicita permissão do microfone
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            hostMicStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            hostAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
             
-            // CORREÇÃO: Utilizando fatiamento nativo estável (start(400))
-            micRecorder = new MediaRecorder(stream);
+            const source = hostAudioCtx.createMediaStreamSource(hostMicStream);
             
-            micRecorder.ondataavailable = async (event) => {
-                if (event.data.size > 0 && isHost) {
-                    const reader = new FileReader();
-                    reader.readAsDataURL(event.data);
-                    reader.onloadend = () => {
-                        socket.emit('RemoteEvent', {
-                            type: 'host_voice',
-                            room: myRoom,
-                            audio: reader.result,
-                            id: 'host_mic'
-                        });
-                    };
-                }
+            // ScriptProcessorNode com buffer de 4096 amostras para menor latência (250ms)
+            hostScriptProcessor = hostAudioCtx.createScriptProcessor(4096, 1, 1);
+            
+            source.connect(hostScriptProcessor);
+            hostScriptProcessor.connect(hostAudioCtx.destination); // Necessário para manter o processo ativo
+
+            hostScriptProcessor.onaudioprocess = (e) => {
+                if (!isHost || !myRoom) return;
+                const inputData = e.inputBuffer.getChannelData(0);
+                
+                // Converte as amostras brutas em vetor numérico leve
+                const pcmData = Array.from(inputData);
+                
+                socket.emit('RemoteEvent', {
+                    type: 'host_voice_pcm',
+                    room: myRoom,
+                    pcm: pcmData
+                });
             };
 
-            // Fatiamento por hardware a cada 400ms (evita race conditions)
-            micRecorder.start(400);
-
-            // CORREÇÃO: Resete estrito de hardware a cada 10 segundos para zerar drift/atraso
-            micInterval = setInterval(() => {
-                if (isHost && micRecorder && micRecorder.state === "recording") {
-                    console.log("[Mic] Resetando barramento de captura para sincronização física...");
-                    micRecorder.stop();
-                }
-            }, 10000);
-
-            micRecorder.onstop = () => {
-                if (isHost && stream && stream.active) {
-                    setupMicRecorder(); // Abre um novo barramento limpo
-                }
-            };
+            addLog("[Mic] Captura de microfone PCM 16kHz ativa.");
 
         } catch (err) {
-            console.warn("Permissão de microfone negada ou erro de hardware:", err);
-        }
-    }
-
-    function setupMicRecorder() {
-        if (isHost && micRecorder) {
-            try {
-                micRecorder.start(400);
-            } catch(e) {}
+            console.warn("[Mic] Microfone não encontrado ou permissão negada: ", err);
         }
     }
 
@@ -403,7 +377,6 @@
         closeModals();
 
         try {
-            // Captura de tela a 20 FPS (480p)
             const stream = await navigator.mediaDevices.getDisplayMedia({
                 video: { width: 854, height: 480, frameRate: 20 },
                 audio: true
@@ -450,12 +423,11 @@
 
             bgWorker.postMessage({ cmd: 'start', interval: 1000 / 20 });
 
-            // Inicia o sistema de microfone corrigido
+            // Inicializa captura de microfone de baixa latência
             startHostMic();
 
             stream.getVideoTracks()[0].onended = () => {
                 socket.emit('RemoteEvent', { type: 'close_room', room: myRoom });
-                if (micInterval) clearInterval(micInterval);
                 location.reload();
             };
 
@@ -474,34 +446,24 @@
         isHost = false;
         closeModals();
 
+        // Inicializa o barramento do processador de áudio do espectador na interação humana para evitar bloqueio de autoplay
+        if (!clientAudioCtx) {
+            clientAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+            nextPlayTime = clientAudioCtx.currentTime;
+        }
+
         document.getElementById('overlay-menu').style.display = 'none';
         document.getElementById('viewport').style.display = 'flex';
         document.getElementById('client-room-title').innerText = `Room: ${myRoom}`;
     }
 
-    // --- ENVIO DE ÁUDIOS ---
-    function sendYoutubeAudio() {
-        const url = document.getElementById('yt-url').value.trim();
-        if (!url) return alert("Please enter a YouTube link.");
-
-        socket.emit('RemoteEvent', {
-            type: 'play_youtube',
-            room: myRoom,
-            url: url
-        });
-
-        alert("Request sent to host's PC!");
-        document.getElementById('yt-url').value = "";
-        document.getElementById('modal-yt').style.display = 'none';
-    }
-
+    // --- ENVIO DE ÁUDIOS (CHUNKED UPLOAD) ---
     function sendUploadedAudio() {
         const fileInput = document.getElementById('audio-upload');
         if (fileInput.files.length === 0) return alert("Please select an audio file.");
 
         const file = fileInput.files[0];
         
-        // Bloqueio físico em 5MB
         if (file.size > 5 * 1024 * 1024) {
             return alert("File exceeds 5MB size limit! Choose a lighter file.");
         }
@@ -562,6 +524,7 @@
         }
     }
 
+    // --- RECEPTOR HOST (Montagem e Tocar com Limite de 15s) ---
     function handleIncomingChunk(packet) {
         const { fileId, index, total, data } = packet;
 
@@ -607,22 +570,24 @@
         const nextAudioData = localTrollQueue.shift();
         const audio = new Audio(nextAudioData);
 
-        // Limite estrito de 15 segundos de reprodução
         let cutoffTimer = setTimeout(() => {
             audio.pause();
             audio.remove();
+            console.log("[Troll] Audio cortado após limite estrito de 15s.");
             isTrollPlaying = false;
-            playNextTrollAudio();
+            playNextTrollAudio(); 
         }, 15000);
 
         audio.onended = () => {
             clearTimeout(cutoffTimer);
             audio.remove();
+            console.log("[Troll] Audio concluído naturalmente.");
             isTrollPlaying = false;
             playNextTrollAudio();
         };
 
         audio.play().catch((err) => {
+            console.error("Erro ao tocar áudio no Host: ", err);
             clearTimeout(cutoffTimer);
             isTrollPlaying = false;
             playNextTrollAudio();
