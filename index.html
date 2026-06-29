@@ -74,6 +74,10 @@
             width: 0%; height: 100%; background: var(--accent);
             transition: width 0.1s ease;
         }
+        .progress-text {
+            position: absolute; inset: 0; display: flex; align-items: center;
+            justify-content: center; font-size: 0.75rem; font-weight: bold;
+        }
 
         /* Viewport do Screenshare */
         #viewport {
@@ -197,20 +201,21 @@
     let isHost = false;
     let bgWorker = null;
 
-    // Fila de reprodução de voz e áudios locais
-    const remoteAudioQueues = {};
+    // Pipeline de Áudio Web de Baixa Latência (Web Audio API)
+    let audioCtx = null;
+    let lastPlayTime = 0;
+
     const localTrollQueue = [];
     let isTrollPlaying = false;
 
     // Gerenciador de Chunks de Upload
-    const CHUNK_SIZE = 100 * 1024; 
+    const CHUNK_SIZE = 100 * 1024; // 100KB chunks
     let currentUploadFile = null;
     const pendingReceives = {};
 
     // Configurações do Microfone do Host
     let micStream = null;
     let micRecorder = null;
-    let micInterval = null;
 
     // --- SISTEMA DE LOGS EM TEMPO REAL ---
     function addLog(msg) {
@@ -235,15 +240,15 @@
         document.getElementById('overlay-menu').style.display = 'none';
     });
 
-    // --- RECEBER SCREENSYNC & VOZ DO HOST ---
+    // --- RECEBER SCREENSYNC, CHUNKS & VOZ ---
     socket.on('RemoteEvent', (packet) => {
         if (!isHost && packet.type === 'sh_frame' && packet.room === myRoom) {
             document.getElementById('remote-screen').src = packet.img;
         }
         
-        // Sincronização de Voz (Ouvir o Host falando no Microfone)
+        // Sincronização de Voz de Baixa Latência (Ouvir o Host falando)
         if (!isHost && packet.type === 'host_voice' && packet.room === myRoom) {
-            playQueuedAudio(packet.id, packet.audio);
+            playLowLatencyChunk(packet.audio);
         }
 
         // Host recebendo fatias (chunks) de áudio do cliente
@@ -262,32 +267,43 @@
         }
     });
 
-    // --- REPRODUTOR DE VOZ SEM LAG (GARGALO DE FILA RESOLVIDO) ---
-    function playQueuedAudio(userId, audioData) {
-        if (!remoteAudioQueues[userId]) remoteAudioQueues[userId] = { queue: [], playing: false };
+    // --- REPRODUTOR DE VOZ DE BAIXA LATÊNCIA (WEB AUDIO API PIPELINE) ---
+    function playLowLatencyChunk(base64Data) {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
         
-        // CORREÇÃO CRÍTICA: Se a fila acumular mais de 2 blocos de áudio (~1 segundo de lag),
-        // limpa tudo e deixa apenas o pedaço de voz mais recente para forçar resincronização instantânea.
-        if (remoteAudioQueues[userId].queue.length > 2) {
-            console.warn("[Voice Watchdog] Descartando pacotes atrasados para eliminar lag acumulado.");
-            remoteAudioQueues[userId].queue = [];
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
         }
 
-        remoteAudioQueues[userId].queue.push(audioData);
-        if (!remoteAudioQueues[userId].playing) processAudioQueue(userId);
-    }
-
-    function processAudioQueue(userId) {
-        const userObj = remoteAudioQueues[userId];
-        if (userObj.queue.length === 0) {
-            userObj.playing = false;
-            return;
+        // Converte base64 para ArrayBuffer binário limpo
+        const base64Clean = base64Data.split(',')[1];
+        const binaryString = atob(base64Clean);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
         }
-        userObj.playing = true;
-        const nextAudio = userObj.queue.shift();
-        const audio = new Audio(nextAudio);
-        audio.onended = () => processAudioQueue(userId);
-        audio.play().catch(() => processAudioQueue(userId));
+
+        // Decodifica e toca de forma encadeada e sincronizada
+        audioCtx.decodeAudioData(bytes.buffer, (buffer) => {
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioCtx.destination);
+
+            const now = audioCtx.currentTime;
+            
+            // Jitter Buffer: se o tempo de agendamento ficou para trás do tempo real, resincroniza
+            if (lastPlayTime < now) {
+                lastPlayTime = now;
+            }
+            
+            source.start(lastPlayTime);
+            lastPlayTime += buffer.duration; // Encadeia o próximo chunk perfeitamente
+        }, (err) => {
+            // Ignora frames corrompidos de inicialização
+        });
     }
 
     // --- CONTROLES DE INTERFACE (MODALS) ---
@@ -311,51 +327,33 @@
         document.getElementById('modal-troll').style.display = 'flex';
     }
 
-    // --- TRANSMISSÃO DE VOZ DO HOST (MICROFONE) COM ALOCAÇÃO LIMPA ---
+    // --- TRANSMISSÃO DE VOZ DO HOST SEM PERDA DE SINCRONIA ---
     async function startHostMic() {
         try {
             micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            setupMicRecorder();
-
-            // Resincronização periódica de 10 segundos
-            micInterval = setInterval(() => {
-                if (isHost && micRecorder && micRecorder.state === "recording") {
-                    micRecorder.stop(); 
+            micRecorder = new MediaRecorder(micStream);
+            
+            micRecorder.ondataavailable = async (event) => {
+                if (event.data.size > 0 && isHost) {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(event.data);
+                    reader.onloadend = () => {
+                        socket.emit('RemoteEvent', {
+                            type: 'host_voice',
+                            room: myRoom,
+                            audio: reader.result,
+                            id: 'host_mic'
+                        });
+                    };
                 }
-            }, 10000);
+            };
+
+            // Fatiamento contínuo real de 250ms sem reiniciar a engine (Evita Pops/Cliques)
+            micRecorder.start(250);
 
         } catch (err) {
             console.warn("Permission denied or microphone not found: ", err);
         }
-    }
-
-    function setupMicRecorder() {
-        if (!micStream) return;
-        micRecorder = new MediaRecorder(micStream);
-        
-        micRecorder.ondataavailable = (event) => {
-            if (event.data.size > 0 && isHost) {
-                const reader = new FileReader();
-                reader.readAsDataURL(event.data);
-                reader.onloadend = () => {
-                    socket.emit('RemoteEvent', {
-                        type: 'host_voice',
-                        room: myRoom,
-                        audio: reader.result,
-                        id: 'host_mic'
-                    });
-                };
-            }
-        };
-
-        micRecorder.onstop = () => {
-            if (isHost && micStream && micStream.active) {
-                setupMicRecorder(); // Abre um novo gravador limpo sem travar o buffer do navegador
-            }
-        };
-
-        // Reduzi para 500ms para manter a voz leve no upload sem atrasar
-        micRecorder.start();
     }
 
     // --- HOST FLOW (Create Room) ---
@@ -414,7 +412,7 @@
 
             bgWorker.postMessage({ cmd: 'start', interval: 1000 / 20 });
 
-            // Inicia o microfone do Host simultaneamente
+            // Ativa o áudio de baixíssima latência
             startHostMic();
 
             stream.getVideoTracks()[0].onended = () => {
@@ -440,6 +438,11 @@
         document.getElementById('overlay-menu').style.display = 'none';
         document.getElementById('viewport').style.display = 'flex';
         document.getElementById('client-room-title').innerText = `Room: ${myRoom}`;
+        
+        // Força a ativação do contexto de áudio no cliente
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
     }
 
     // --- CHUNKED UPLOAD LOGIC & PLAYBACK QUEUE ---
@@ -449,7 +452,6 @@
 
         const file = fileInput.files[0];
         
-        // Limite de 5MB
         if (file.size > 5 * 1024 * 1024) {
             return alert("File exceeds 5MB size limit! Choose a lighter file.");
         }
@@ -470,11 +472,9 @@
                 total: totalChunks
             };
 
-            // Mostra a barra de progresso no cliente
             document.getElementById('upload-progress-container').style.display = 'block';
             updateUploadProgress(0, totalChunks);
 
-            // Envia o primeiro chunk de dados
             sendChunk(0);
         };
         reader.readAsDataURL(file);
@@ -504,7 +504,6 @@
             updateUploadProgress(nextIndex, currentUploadFile.total);
             sendChunk(nextIndex); 
         } else {
-            // Envio 100% Concluído
             document.getElementById('upload-progress-container').style.display = 'none';
             document.getElementById('submit-file-btn').disabled = false;
             document.getElementById('submit-file-btn').innerText = "Send to Host";
@@ -514,6 +513,7 @@
         }
     }
 
+    // --- RECEPTOR HOST (Montagem e Tocar com Limite de 15s) ---
     function handleIncomingChunk(packet) {
         const { fileId, index, total, data } = packet;
 
@@ -524,13 +524,11 @@
 
         pendingReceives[fileId][index] = data;
 
-        // Atualiza a barra de progresso do Host
         const receivedCount = pendingReceives[fileId].filter(c => c !== null).length;
         const pct = Math.floor((receivedCount / total) * 100);
         document.getElementById('host-progress-bar').style.width = `${pct}%`;
         document.getElementById('host-progress-val').innerText = pct;
 
-        // Envia confirmação (ACK) para o cliente enviar o próximo chunk
         socket.emit('RemoteEvent', {
             type: 'audio_chunk_ack',
             room: myRoom,
@@ -538,13 +536,11 @@
             index: index
         });
 
-        // Quando o arquivo estiver completo
         if (receivedCount === total) {
             document.getElementById('host-progress-container').style.display = 'none';
             const fullBase64 = pendingReceives[fileId].join('');
             delete pendingReceives[fileId];
 
-            // Adiciona o áudio na fila de reprodução do Host
             addAudioToTrollQueue(fullBase64);
         }
     }
