@@ -31,7 +31,7 @@
 
         .card {
             background: var(--panel); border: 2px solid var(--border); padding: 35px;
-            border-radius: 16px; text-align: center; width: 320px;
+            border-radius: 16px; text-align: center; width: 340px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.8);
         }
 
@@ -185,6 +185,7 @@
     </div>
 
 <script>
+    // --- CREDENCIAIS ---
     const TUNNEL = "https://ssl-loves-comic-percent.trycloudflare.com";
     const VIRTUAL_SERVER_KEY = "13c25d9dae";
     
@@ -264,7 +265,7 @@
         audio.play().catch(() => processAudioQueue(userId));
     }
 
-    // --- CONTROLES DE INTERFACE ---
+    // --- CONTROLES DE INTERFACE (MODALS) ---
     function limitLength(input, max) {
         if (input.value.length > max) input.value = input.value.slice(0, max);
     }
@@ -321,7 +322,7 @@
         }
     }
 
-    // --- HOST FLOW (Create Room) ---
+    // --- HOST FLOW ---
     async function createRoomSubmit() {
         const pass = document.getElementById('create-password').value;
         if (pass.length !== 4) return alert("Password must be exactly 4 digits.");
@@ -390,7 +391,7 @@
         }
     }
 
-    // --- CLIENT FLOW (Find Room) ---
+    // --- CLIENT FLOW ---
     function joinRoomSubmit() {
         const pass = document.getElementById('find-password').value;
         if (pass.length !== 4) return alert("Password must be exactly 4 digits.");
@@ -425,14 +426,11 @@
         if (fileInput.files.length === 0) return alert("Please select an audio file.");
 
         const file = fileInput.files[0];
-
-        // CORREÇÃO CRÍTICA DE REDE: Limita o upload de arquivos no cliente para 3MB
-        // Isso impede o travamento de rede e congela da tela por overhead do Socket.io
-        if (file.size > 3 * 1024 * 1024) {
-            alert("File is too large! Maximum file size is 3MB to prevent screenshare lag. Since only 15 seconds will play, please upload a smaller or shorter audio clip.");
-            fileInput.value = "";
-            return;
-        }
+        
+        // CORREÇÃO: Limita o arquivo enviado a no máximo 1 MB
+        // Isso evita estouro de buffer no Socket.io do seu celular, eliminando quedas de conexão/recarregamento
+        const maxBytes = 1 * 1024 * 1024; // 1 MB
+        const finalFile = file.size > maxBytes ? file.slice(0, maxBytes) : file;
 
         const reader = new FileReader();
         reader.onload = function(e) {
@@ -446,7 +444,7 @@
             document.getElementById('modal-file').style.display = 'none';
         };
 
-        reader.readAsDataURL(file);
+        reader.readAsDataURL(finalFile);
     }
 </script>
 </body>
