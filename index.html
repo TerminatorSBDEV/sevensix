@@ -70,7 +70,6 @@
 
         .controls-row { display: flex; gap: 15px; margin-top: 15px; width: 90%; max-width: 600px; }
 
-        /* Loader de Transmissão */
         .loader {
             border: 4px solid #f3f3f3; border-top: 4px solid var(--blue);
             border-radius: 50%; width: 40px; height: 40px;
@@ -81,7 +80,7 @@
 </head>
 <body>
 
-    <!-- Passo 0: Buffering Inicial de Conexão -->
+    <!-- Passo 0: Buffering Inicial -->
     <div id="overlay-sync" class="overlay">
         <div class="card" style="border-color: var(--blue);">
             <div class="loader"></div>
@@ -175,17 +174,16 @@
     </div>
 
 <script>
-    // --- CONEXÃO COM SEU EZBRIDGE ATUALIZADO ---
     const TUNNEL = "https://yang-bears-paperbacks-throat.trycloudflare.com";
     const VIRTUAL_SERVER_KEY = "66817a1a06";
     
-    const socket = io(TUNNEL, { auth: { token: "default_key" }, transports: ['websocket'] });
+    const socket = io(TUNNEL, { auth: { token: "default_key" } });
 
     let myRoom = "";
     let isHost = false;
     let bgWorker = null;
 
-    // --- CONEXÃO INICIAL (BUFFER SCREEN BYPASS) ---
+    // --- CONEXÃO INICIAL ---
     socket.on('connect', () => {
         document.getElementById('overlay-sync').style.display = 'none';
         document.getElementById('overlay-menu').style.display = 'flex';
@@ -244,7 +242,6 @@
         closeModals();
 
         try {
-            // Captura tela com áudio (20 FPS, 480p)
             const stream = await navigator.mediaDevices.getDisplayMedia({
                 video: { width: 854, height: 480, frameRate: 20 },
                 audio: true
@@ -261,7 +258,6 @@
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
 
-            // Web Worker para manter os frames constantes a 20 FPS mesmo em segundo plano
             const workerCode = `
                 let timer = null;
                 self.onmessage = function(e) {
