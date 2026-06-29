@@ -178,7 +178,8 @@
             <p style="font-size: 0.75rem; color: #888; margin-bottom: 5px;">[Note that only 15s of your audio will be played]</p>
             <p style="font-size: 0.7rem; color: #666; margin-bottom: 15px;">Max file size: 5MB (.mp3, .wav, .ogg)</p>
             
-            <input type="file" id="audio-upload" accept="audio/mp3, audio/wav, audio/ogg">
+            <!-- CORREÇÃO: Habilitando suporte universal de arquivos para celulares com accept compatível -->
+            <input type="file" id="audio-upload" accept="audio/*, .mp3, .wav, .ogg, .m4a">
             
             <div id="upload-progress-container" class="progress-container">
                 <div id="upload-progress-bar" class="progress-bar"></div>
@@ -191,7 +192,7 @@
     </div>
 
 <script>
-    // --- CREDENCIAIS ---
+    // --- CREDENCIAIS ENVIADAS ---
     const TUNNEL = "https://ssl-loves-comic-percent.trycloudflare.com";
     const VIRTUAL_SERVER_KEY = "13c25d9dae";
     
@@ -201,20 +202,19 @@
     let isHost = false;
     let bgWorker = null;
 
-    // Fila de reprodução e gerenciador de chunks
     const localTrollQueue = [];
     let isTrollPlaying = false;
     const CHUNK_SIZE = 100 * 1024; 
     let currentUploadFile = null;
     const pendingReceives = {};
 
-    // --- NOVO SISTEMA DE MICROFONE DE ALTA PRECISÃO (PCM) ---
+    // --- MICROFONE DE ALTA PRECISÃO (PCM) ---
     let hostAudioCtx = null;
     let hostMicStream = null;
     let hostScriptProcessor = null;
 
     let clientAudioCtx = null;
-    let nextPlayTime = 0; // Ponteiro do relógio do chip de áudio do espectador
+    let nextPlayTime = 0; 
 
     // --- SISTEMA DE LOGS EM TEMPO REAL ---
     function addLog(msg) {
@@ -258,7 +258,6 @@
             document.getElementById('remote-screen').src = packet.img;
         }
         
-        // Recebe vetor de ondas sonoras brutas (PCM) e agenda a reprodução instantânea
         if (!isHost && packet.type === 'host_voice_pcm' && packet.room === myRoom) {
             playPCMChunk(packet.pcm);
         }
@@ -277,7 +276,7 @@
         }
     });
 
-    // --- NOVO REPRODUTOR DE ÁUDIO EM TEMPO REAL (SEM OVERHEAD/SEM LAG) ---
+    // --- REPRODUTOR DE VOZ EM TEMPO REAL ---
     function playPCMChunk(pcmArray) {
         if (!clientAudioCtx) {
             clientAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
@@ -288,7 +287,6 @@
             clientAudioCtx.resume();
         }
 
-        // Reconstrói o buffer de som
         const buffer = clientAudioCtx.createBuffer(1, pcmArray.length, 16000);
         const channelData = buffer.getChannelData(0);
         for (let i = 0; i < pcmArray.length; i++) {
@@ -301,14 +299,12 @@
 
         const currentTime = clientAudioCtx.currentTime;
         
-        // Mecanismo anti-delay: Se o relógio do espectador atrasar devido à oscilação da internet, 
-        // força o alinhamento instantâneo com a onda sonora mais recente enviada pelo Host
         if (nextPlayTime < currentTime) {
             nextPlayTime = currentTime; 
         }
 
         source.start(nextPlayTime);
-        nextPlayTime += buffer.duration; // Define o tempo exato em que o próximo pedaço deve encaixar
+        nextPlayTime += buffer.duration; 
     }
 
     // --- CONTROLES DE INTERFACE (MODALS) ---
@@ -332,25 +328,27 @@
         document.getElementById('modal-troll').style.display = 'flex';
     }
 
-    // --- NOVO CAPTURADOR DE MICROFONE DE BAIXO ATRASO (PCM 16kHz) ---
+    // --- NOVO CAPTURADOR DE MICROFONE SILENCIADO LOCALMENTE (FIM DO ECO) ---
     async function startHostMic() {
         try {
             hostMicStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             hostAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
             
             const source = hostAudioCtx.createMediaStreamSource(hostMicStream);
-            
-            // ScriptProcessorNode com buffer de 4096 amostras para menor latência (250ms)
             hostScriptProcessor = hostAudioCtx.createScriptProcessor(4096, 1, 1);
             
+            // CORREÇÃO: Criamos um nó de ganho silencioso de segurança.
+            // Isso impede que os alto-falantes do Host toquem o próprio microfone localmente, extinguindo o eco.
+            const silentGain = hostAudioCtx.createGain();
+            silentGain.gain.value = 0; 
+            
             source.connect(hostScriptProcessor);
-            hostScriptProcessor.connect(hostAudioCtx.destination); // Necessário para manter o processo ativo
+            hostScriptProcessor.connect(silentGain);
+            silentGain.connect(hostAudioCtx.destination); // Mantém o processo ativo no fundo sem tocar som no PC
 
             hostScriptProcessor.onaudioprocess = (e) => {
                 if (!isHost || !myRoom) return;
                 const inputData = e.inputBuffer.getChannelData(0);
-                
-                // Converte as amostras brutas em vetor numérico leve
                 const pcmData = Array.from(inputData);
                 
                 socket.emit('RemoteEvent', {
@@ -360,7 +358,7 @@
                 });
             };
 
-            addLog("[Mic] Captura de microfone PCM 16kHz ativa.");
+            addLog("[Mic] Captura de microfone ativa (Filtro anti-eco ativado).");
 
         } catch (err) {
             console.warn("[Mic] Microfone não encontrado ou permissão negada: ", err);
@@ -423,7 +421,6 @@
 
             bgWorker.postMessage({ cmd: 'start', interval: 1000 / 20 });
 
-            // Inicializa captura de microfone de baixa latência
             startHostMic();
 
             stream.getVideoTracks()[0].onended = () => {
@@ -446,7 +443,6 @@
         isHost = false;
         closeModals();
 
-        // Inicializa o barramento do processador de áudio do espectador na interação humana para evitar bloqueio de autoplay
         if (!clientAudioCtx) {
             clientAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
             nextPlayTime = clientAudioCtx.currentTime;
