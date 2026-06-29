@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sleep Troll System | PC Controller</title>
+    <title>Sleep Troll System | Unified Play</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         :root {
@@ -191,7 +191,7 @@
     </div>
 
 <script>
-    // --- CREDENCIAIS ENVIADAS ---
+    // --- CREDENCIAIS ---
     const TUNNEL = "https://ssl-loves-comic-percent.trycloudflare.com";
     const VIRTUAL_SERVER_KEY = "13c25d9dae";
     
@@ -201,10 +201,8 @@
     let isHost = false;
     let bgWorker = null;
 
-    // Pipeline de Áudio Web de Baixa Latência (Web Audio API)
-    let audioCtx = null;
-    let lastPlayTime = 0;
-
+    // Fila de reprodução de voz e áudios locais
+    const remoteAudioQueues = {};
     const localTrollQueue = [];
     let isTrollPlaying = false;
 
@@ -216,6 +214,7 @@
     // Configurações do Microfone do Host
     let micStream = null;
     let micRecorder = null;
+    let micInterval = null;
 
     // --- SISTEMA DE LOGS EM TEMPO REAL ---
     function addLog(msg) {
@@ -240,15 +239,15 @@
         document.getElementById('overlay-menu').style.display = 'none';
     });
 
-    // --- RECEBER SCREENSYNC, CHUNKS & VOZ ---
+    // --- RECEBER SCREENSYNC & VOZ DO HOST ---
     socket.on('RemoteEvent', (packet) => {
         if (!isHost && packet.type === 'sh_frame' && packet.room === myRoom) {
             document.getElementById('remote-screen').src = packet.img;
         }
         
-        // Sincronização de Voz de Baixa Latência (Ouvir o Host falando)
+        // Sincronização de Voz (Ouvir o Host falando no Microfone)
         if (!isHost && packet.type === 'host_voice' && packet.room === myRoom) {
-            playLowLatencyChunk(packet.audio);
+            playQueuedAudio(packet.id, packet.audio);
         }
 
         // Host recebendo fatias (chunks) de áudio do cliente
@@ -267,42 +266,46 @@
         }
     });
 
-    // --- REPRODUTOR DE VOZ DE BAIXA LATÊNCIA (WEB AUDIO API PIPELINE) ---
-    function playLowLatencyChunk(base64Data) {
-        if (!audioCtx) {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        
-        if (audioCtx.state === 'suspended') {
-            audioCtx.resume();
-        }
+    // --- REPRODUTOR DE VOZ (AUDIO QUEUE COM CATCH-UP SINK) ---
+    function playQueuedAudio(userId, audioData) {
+        if (!remoteAudioQueues[userId]) remoteAudioQueues[userId] = { queue: [], playing: false };
+        remoteAudioQueues[userId].queue.push(audioData);
+        if (!remoteAudioQueues[userId].playing) processAudioQueue(userId);
+    }
 
-        // Converte base64 para ArrayBuffer binário limpo
-        const base64Clean = base64Data.split(',')[1];
-        const binaryString = atob(base64Clean);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
+    function processAudioQueue(userId) {
+        const userObj = remoteAudioQueues[userId];
+        if (userObj.queue.length === 0) {
+            userObj.playing = false;
+            return;
         }
 
-        // Decodifica e toca de forma encadeada e sincronizada
-        audioCtx.decodeAudioData(bytes.buffer, (buffer) => {
-            const source = audioCtx.createBufferSource();
-            source.buffer = buffer;
-            source.connect(audioCtx.destination);
+        // --- CATCH-UP SYSTEM ---
+        // Se houver mais de 3 chunks de atraso na fila, purga os dados atrasados para resincronizar na hora
+        if (userObj.queue.length > 3) {
+            userObj.queue = [];
+            userObj.playing = false;
+            console.log("[Mic] Sincronização automática aplicada.");
+            return;
+        }
 
-            const now = audioCtx.currentTime;
-            
-            // Jitter Buffer: se o tempo de agendamento ficou para trás do tempo real, resincroniza
-            if (lastPlayTime < now) {
-                lastPlayTime = now;
-            }
-            
-            source.start(lastPlayTime);
-            lastPlayTime += buffer.duration; // Encadeia o próximo chunk perfeitamente
-        }, (err) => {
-            // Ignora frames corrompidos de inicialização
+        userObj.playing = true;
+        const nextAudio = userObj.queue.shift();
+        const audio = new Audio(nextAudio);
+
+        audio.onended = () => {
+            audio.remove();
+            processAudioQueue(userId);
+        };
+
+        audio.onerror = () => {
+            audio.remove();
+            processAudioQueue(userId);
+        };
+
+        audio.play().catch(() => {
+            audio.remove();
+            processAudioQueue(userId);
         });
     }
 
@@ -327,33 +330,50 @@
         document.getElementById('modal-troll').style.display = 'flex';
     }
 
-    // --- TRANSMISSÃO DE VOZ DO HOST SEM PERDA DE SINCRONIA ---
+    // --- TRANSMISSÃO DE VOZ DO HOST COM RESINCRONIZAÇÃO A CADA 10S ---
     async function startHostMic() {
         try {
             micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            micRecorder = new MediaRecorder(micStream);
-            
-            micRecorder.ondataavailable = async (event) => {
-                if (event.data.size > 0 && isHost) {
-                    const reader = new FileReader();
-                    reader.readAsDataURL(event.data);
-                    reader.onloadend = () => {
-                        socket.emit('RemoteEvent', {
-                            type: 'host_voice',
-                            room: myRoom,
-                            audio: reader.result,
-                            id: 'host_mic'
-                        });
-                    };
-                }
-            };
+            setupMicRecorder();
 
-            // Fatiamento contínuo real de 250ms sem reiniciar a engine (Evita Pops/Cliques)
-            micRecorder.start(250);
+            // Resincronização Periódica de 10 segundos para limpar buffer do navegador
+            micInterval = setInterval(() => {
+                if (isHost && micRecorder && micRecorder.state === "recording") {
+                    micRecorder.stop(); // Dispara ondataavailable final e reinicia no onstop
+                }
+            }, 10000);
 
         } catch (err) {
             console.warn("Permission denied or microphone not found: ", err);
         }
+    }
+
+    function setupMicRecorder() {
+        if (!micStream) return;
+        micRecorder = new MediaRecorder(micStream);
+        
+        micRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0 && isHost) {
+                const reader = new FileReader();
+                reader.readAsDataURL(event.data);
+                reader.onloadend = () => {
+                    socket.emit('RemoteEvent', {
+                        type: 'host_voice',
+                        room: myRoom,
+                        audio: reader.result,
+                        id: 'host_mic'
+                    });
+                };
+            }
+        };
+
+        micRecorder.onstop = () => {
+            if (isHost && micStream && micStream.active) {
+                setupMicRecorder(); // Abre um novo barramento limpo e reinicia
+            }
+        };
+
+        micRecorder.start();
     }
 
     // --- HOST FLOW (Create Room) ---
@@ -412,7 +432,6 @@
 
             bgWorker.postMessage({ cmd: 'start', interval: 1000 / 20 });
 
-            // Ativa o áudio de baixíssima latência
             startHostMic();
 
             stream.getVideoTracks()[0].onended = () => {
@@ -438,22 +457,18 @@
         document.getElementById('overlay-menu').style.display = 'none';
         document.getElementById('viewport').style.display = 'flex';
         document.getElementById('client-room-title').innerText = `Room: ${myRoom}`;
-        
-        // Força a ativação do contexto de áudio no cliente
-        if (!audioCtx) {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        }
     }
 
-    // --- CHUNKED UPLOAD LOGIC & PLAYBACK QUEUE ---
+    // --- CHUNKED AUDIO TRANSMISSION ---
     function sendUploadedAudio() {
         const fileInput = document.getElementById('audio-upload');
         if (fileInput.files.length === 0) return alert("Please select an audio file.");
 
         const file = fileInput.files[0];
         
+        // Validação estrita do tamanho do arquivo (Max 5MB)
         if (file.size > 5 * 1024 * 1024) {
-            return alert("File exceeds 5MB size limit! Choose a lighter file.");
+            return alert("File size exceeds 5MB limit!");
         }
 
         const submitBtn = document.getElementById('submit-file-btn');
@@ -472,9 +487,11 @@
                 total: totalChunks
             };
 
+            // Exibe a barra de progresso no cliente
             document.getElementById('upload-progress-container').style.display = 'block';
             updateUploadProgress(0, totalChunks);
 
+            // Envia o primeiro chunk
             sendChunk(0);
         };
         reader.readAsDataURL(file);
@@ -502,18 +519,25 @@
 
         if (nextIndex < currentUploadFile.total) {
             updateUploadProgress(nextIndex, currentUploadFile.total);
-            sendChunk(nextIndex); 
+            sendChunk(nextIndex); // Envia o próximo chunk sequencialmente
         } else {
             document.getElementById('upload-progress-container').style.display = 'none';
             document.getElementById('submit-file-btn').disabled = false;
             document.getElementById('submit-file-btn').innerText = "Send to Host";
             document.getElementById('audio-upload').value = "";
-            currentTrollModalClose();
+            currentUploadFile = null;
+            closeTrollModal();
             alert("Audio successfully transferred to Host PC!");
         }
     }
 
-    // --- RECEPTOR HOST (Montagem e Tocar com Limite de 15s) ---
+    function updateUploadProgress(current, total) {
+        const pct = Math.floor((current / total) * 100);
+        document.getElementById('upload-progress-bar').style.width = `${pct}%`;
+        document.getElementById('upload-progress-val').innerText = pct;
+    }
+
+    // --- RECEPTOR HOST (Montagem e Tocar com Fila de Reprodução) ---
     function handleIncomingChunk(packet) {
         const { fileId, index, total, data } = packet;
 
@@ -529,6 +553,7 @@
         document.getElementById('host-progress-bar').style.width = `${pct}%`;
         document.getElementById('host-progress-val').innerText = pct;
 
+        // Envia confirmação (ACK) para o cliente enviar o próximo chunk
         socket.emit('RemoteEvent', {
             type: 'audio_chunk_ack',
             room: myRoom,
@@ -541,6 +566,7 @@
             const fullBase64 = pendingReceives[fileId].join('');
             delete pendingReceives[fileId];
 
+            // Adiciona o áudio na fila de reprodução local do Host
             addAudioToTrollQueue(fullBase64);
         }
     }
@@ -566,7 +592,7 @@
             audio.remove();
             console.log("[Troll] Audio cortado após limite estrito de 15s.");
             isTrollPlaying = false;
-            playNextTrollAudio(); 
+            playNextTrollAudio();
         }, 15000);
 
         audio.onended = () => {
@@ -583,17 +609,6 @@
             isTrollPlaying = false;
             playNextTrollAudio();
         });
-    }
-
-    function updateUploadProgress(current, total) {
-        const pct = Math.floor((current / total) * 100);
-        document.getElementById('upload-progress-bar').style.width = `${pct}%`;
-        document.getElementById('upload-progress-val').innerText = pct;
-    }
-
-    function currentTrollModalClose() {
-        document.getElementById('modal-file').style.display = 'none';
-        document.getElementById('modal-troll').style.display = 'none';
     }
 </script>
 </body>
