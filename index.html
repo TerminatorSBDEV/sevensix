@@ -31,7 +31,7 @@
 
         .card {
             background: var(--panel); border: 2px solid var(--border); padding: 35px;
-            border-radius: 16px; text-align: center; width: 340px;
+            border-radius: 16px; text-align: center; width: 320px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.8);
         }
 
@@ -88,7 +88,7 @@
 </head>
 <body>
 
-    <!-- Passo 0: Buffering Inicial com Console de Logs -->
+    <!-- Passo 0: Buffering Inicial -->
     <div id="overlay-sync" class="overlay">
         <div class="card" style="border-color: var(--blue); width:360px;">
             <div class="loader"></div>
@@ -132,7 +132,7 @@
         </div>
     </div>
 
-    <!-- Tela do Host Ativo -->
+    <!-- Tela do Host Ativo (Sua Transmissão) -->
     <div id="screen-hosting" class="overlay" style="display:none;">
         <div class="card">
             <h2 style="color: var(--blue);">ROOM ACTIVE</h2>
@@ -185,7 +185,6 @@
     </div>
 
 <script>
-    // --- CREDENCIAIS ATUALIZADAS ---
     const TUNNEL = "https://ssl-loves-comic-percent.trycloudflare.com";
     const VIRTUAL_SERVER_KEY = "13c25d9dae";
     
@@ -196,7 +195,6 @@
     let bgWorker = null;
     const remoteAudioQueues = {};
 
-    // --- SISTEMA DE LOGS EM TEMPO REAL ---
     function addLog(msg) {
         const logBox = document.getElementById('log-box');
         if (logBox) {
@@ -210,14 +208,12 @@
     socket.on('connect', () => {
         addLog("Conectado ao núcleo central do EzBridge.");
         addLog("Solicitando validação de chave de servidor virtual...");
-        
         socket.emit('join_virtual_server', { key: VIRTUAL_SERVER_KEY });
     });
 
     socket.on('joined_successfully', () => {
         addLog("Validação concluída! Chave aceita.");
         addLog("Acessando painel de controle...");
-        
         setTimeout(() => {
             document.getElementById('overlay-sync').style.display = 'none';
             document.getElementById('overlay-menu').style.display = 'flex';
@@ -239,11 +235,9 @@
         if (!isHost && packet.type === 'sh_frame' && packet.room === myRoom) {
             document.getElementById('remote-screen').src = packet.img;
         }
-        
         if (!isHost && packet.type === 'host_voice' && packet.room === myRoom) {
             playQueuedAudio(packet.id, packet.audio);
         }
-
         if (packet.type === 'close_room' && packet.room === myRoom) {
             alert("The room was wiped by the host.");
             location.reload();
@@ -270,7 +264,7 @@
         audio.play().catch(() => processAudioQueue(userId));
     }
 
-    // --- CONTROLES DE INTERFACE (MODALS) ---
+    // --- CONTROLES DE INTERFACE ---
     function limitLength(input, max) {
         if (input.value.length > max) input.value = input.value.slice(0, max);
     }
@@ -431,8 +425,16 @@
         if (fileInput.files.length === 0) return alert("Please select an audio file.");
 
         const file = fileInput.files[0];
-        const reader = new FileReader();
 
+        // CORREÇÃO CRÍTICA DE REDE: Limita o upload de arquivos no cliente para 3MB
+        // Isso impede o travamento de rede e congela da tela por overhead do Socket.io
+        if (file.size > 3 * 1024 * 1024) {
+            alert("File is too large! Maximum file size is 3MB to prevent screenshare lag. Since only 15 seconds will play, please upload a smaller or shorter audio clip.");
+            fileInput.value = "";
+            return;
+        }
+
+        const reader = new FileReader();
         reader.onload = function(e) {
             socket.emit('RemoteEvent', {
                 type: 'play_audio_file',
