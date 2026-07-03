@@ -2,613 +2,73 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sleep Troll System | PC Controller</title>
+    <title>Tic-Tac-Toe Client</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        :root {
-            --bg: #030303;
-            --panel: #0d0d11;
-            --accent: #ff007f; /* Rosa Neon */
-            --blue: #00f0ff; /* Azul Neon */
-            --border: #1a1a24;
-            --text: #ffffff;
-        }
-
-        body, html {
-            margin: 0; padding: 0; height: 100%;
-            background-color: var(--bg); color: var(--text);
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            overflow: hidden; touch-action: none; user-select: none;
-        }
-
-        /* Buffer Screen */
-        .overlay {
-            position: fixed; inset: 0; background: var(--bg);
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            z-index: 2000; transition: 0.3s;
-        }
-
-        .card {
-            background: var(--panel); border: 2px solid var(--border); padding: 35px;
-            border-radius: 16px; text-align: center; width: 340px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
-        }
-
-        h1, h2, h3 { color: var(--blue); margin-top: 0; text-shadow: 0 0 10px rgba(0, 240, 255, 0.4); }
-
-        .btn {
-            width: 100%; padding: 14px; margin: 10px 0; background: var(--accent);
-            border: none; color: white; font-weight: bold; border-radius: 8px;
-            cursor: pointer; transition: 0.2s; font-size: 1rem;
-            text-shadow: 0 0 5px rgba(255, 0, 127, 0.5);
-        }
-        .btn:hover { background: #e0006c; transform: scale(1.02); }
-        .btn-blue { background: var(--blue); text-shadow: 0 0 5px rgba(0, 240, 255, 0.5); color: black;}
-        .btn-blue:hover { background: #00c2cc; }
-        .btn-secondary { background: #121216; color: #fff; border: 1px solid var(--border); }
-        .btn-secondary:hover { background: #1c1c24; }
-
-        input {
-            width: 100%; padding: 12px; margin: 10px 0; background: #000;
-            border: 1px solid var(--border); color: white; border-radius: 8px;
-            text-align: center; font-size: 1.1rem; box-sizing: border-box; outline: none;
-        }
-        input:focus { border-color: var(--blue); }
-
-        /* Console de Logs no Buffering */
-        .log-console {
-            margin-top: 20px; background: #000; border: 1px solid var(--border);
-            border-radius: 8px; height: 100px; overflow-y: auto; text-align: left;
-            padding: 10px; font-family: monospace; font-size: 0.75rem; color: var(--accent);
-            width: 100%; box-sizing: border-box;
-        }
-
-        /* Barra de Progresso do Chunked Upload */
-        .progress-container {
-            width: 100%; background: #000; border: 1px solid var(--border);
-            border-radius: 8px; height: 22px; overflow: hidden; margin: 15px 0;
-            display: none; position: relative;
-        }
-        .progress-bar {
-            width: 0%; height: 100%; background: var(--accent);
-            transition: width 0.1s ease;
-        }
-        .progress-text {
-            position: absolute; inset: 0; display: flex; align-items: center;
-            justify-content: center; font-size: 0.75rem; font-weight: bold;
-        }
-
-        /* Viewport do Screenshare */
-        #viewport {
-            display: none; width: 100vw; height: 100vh;
-            position: fixed; inset: 0; z-index: 10; background: black;
-            flex-direction: column; justify-content: center; align-items: center;
-        }
-
-        #remote-screen {
-            max-width: 100%; max-height: 80%; object-fit: contain;
-            border: 1px solid var(--border);
-        }
-
-        .controls-row { display: flex; gap: 15px; margin-top: 15px; width: 90%; max-width: 600px; }
-
-        .loader {
-            border: 4px solid #f3f3f3; border-top: 4px solid var(--blue);
-            border-radius: 50%; width: 40px; height: 40px;
-            animation: spin 1s linear infinite; margin: 20px auto;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        body { background: #0c0c0e; color: #fff; font-family: sans-serif; text-align: center; }
+        .grid { display: grid; grid-template-columns: repeat(3, 100px); gap: 8px; justify-content: center; margin-top: 20px; }
+        .cell { width: 100px; height: 100px; background: #1e1e24; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; cursor: pointer; border-radius: 8px; }
+        #status { font-weight: bold; margin-top: 20px; color: #00ff88; }
     </style>
 </head>
 <body>
-
-    <!-- Passo 0: Buffering Inicial -->
-    <div id="overlay-sync" class="overlay">
-        <div class="card" style="border-color: var(--blue); width:360px;">
-            <div class="loader"></div>
-            <h3>Hold up, we're connecting you to our server checking your data...</h3>
-            <div style="font-size:0.8rem; color:#666;">Establishing pipeline with EzBridge...</div>
-            <div id="log-box" class="log-console">
-                <div>[SYSTEM] Iniciar conexão Socket.io...</div>
-            </div>
-        </div>
+    <h2>Tic-Tac-Toe (Client)</h2>
+    <div id="status">Connecting...</div>
+    <div class="grid">
+        <div class="cell" onclick="clickCell(0)"></div>
+        <div class="cell" onclick="clickCell(1)"></div>
+        <div class="cell" onclick="clickCell(2)"></div>
+        <div class="cell" onclick="clickCell(3)"></div>
+        <div class="cell" onclick="makeMove(4)"></div>
+        <div class="cell" onclick="clickCell(5)"></div>
+        <div class="cell" onclick="clickCell(6)"></div>
+        <div class="cell" onclick="clickCell(7)"></div>
+        <div class="cell" onclick="clickCell(8)"></div>
     </div>
 
-    <!-- Passo 1: Menu Principal -->
-    <div id="overlay-menu" class="overlay" style="display:none;">
-        <div class="card" style="width:340px;">
-            <h2 style="color: var(--accent); text-shadow: 0 0 10px rgba(255, 0, 127, 0.4);">Troll Sleep System</h2>
-            <p style="font-size: 0.85rem; color:#888; line-height: 1.4; margin-bottom: 20px;">
-                Welcome to my random app, where you can troll me with loud audios while i sleep!
-            </p>
-            <button class="btn btn-blue" type="button" onclick="openCreateRoomModal()">Create Room</button>
-            <button class="btn" type="button" onclick="openFindRoomModal()">Find Room</button>
-        </div>
-    </div>
+    <script>
+        const key = "d5b39a94cf";
+        const link = "https://passenger-intend-bite-jeremy.trycloudflare.com";
+        const socket = io(link, { auth: { token: "default_key" } });
+        let mySymbol = "";
+        let isMyTurn = false;
 
-    <!-- Passo 1.5: Popup Criar Sala -->
-    <div id="modal-create" class="overlay" style="display:none;">
-        <div class="card">
-            <h3>Set Room Password</h3>
-            <input type="number" id="create-password" placeholder="4 Digit Password (ex: 1221)" maxlength="4" oninput="limitLength(this, 4)">
-            <button class="btn btn-blue" type="button" onclick="createRoomSubmit()">Create & Share</button>
-            <button class="btn btn-secondary" type="button" onclick="closeModals()">Cancel</button>
-        </div>
-    </div>
+        socket.on("connect", () => {
+            document.getElementById("status").innerText = "Connecting...";
+            socket.emit("join_virtual_server", { key });
+        });
 
-    <!-- Passo 1.6: Popup Achar Sala -->
-    <div id="modal-find" class="overlay" style="display:none;">
-        <div class="card">
-            <h3>Enter Room Password</h3>
-            <input type="number" id="find-password" placeholder="4 Digit Password" maxlength="4" oninput="limitLength(this, 4)">
-            <button class="btn" type="button" onclick="joinRoomSubmit()">Join Room</button>
-            <button class="btn btn-secondary" type="button" onclick="closeModals()">Cancel</button>
-        </div>
-    </div>
+        socket.on("joined_successfully", () => {
+            // Avisa o ServerScript que entramos na partida
+            socket.emit("RemoteEvent", { type: "player_join" });
+        });
 
-    <!-- Tela do Host Ativo (Sua Transmissão) -->
-    <div id="screen-hosting" class="overlay" style="display:none;">
-        <div class="card">
-            <h2 style="color: var(--blue);">ROOM ACTIVE</h2>
-            <div style="font-size: 2.2rem; font-weight: bold; color: var(--accent); margin: 15px 0;" id="room-code-display">----</div>
-            <p style="font-size:0.85rem; color:#888;">Streaming webcam with audio at 20 FPS (480p).</p>
-            <div id="host-progress-container" class="progress-container">
-                <div id="host-progress-bar" class="progress-bar"></div>
-                <div class="progress-text">Receiving Troll Audio: <span id="host-progress-val">0</span>%</div>
-            </div>
-            <button class="btn btn-secondary" type="button" onclick="location.reload()">Wipe & Close Room</button>
-        </div>
-    </div>
-
-    <!-- Passo 2: Viewport do Amigo (Client View) -->
-    <div id="viewport">
-        <h3 id="client-room-title" style="margin-bottom: 10px; font-size: 1rem;">Room: ----</h3>
-        <img id="remote-screen" draggable="false" src="">
-        <div class="controls-row">
-            <button class="btn btn-secondary" type="button" onclick="location.reload()">Leave</button>
-            <button class="btn" type="button" onclick="openTrollModal()">Play Audio</button>
-        </div>
-    </div>
-
-    <!-- Passo 2.5: Modal de Opções de Trollagem (Play Audio) -->
-    <div id="modal-troll" class="overlay" style="display:none;">
-        <div class="card">
-            <h3>Upload Audio File</h3>
-            <p style="font-size: 0.75rem; color: #888; margin-bottom: 5px;">[Note that only 15s of your audio will be played]</p>
-            <p style="font-size: 0.7rem; color: #666; margin-bottom: 15px;">Max file size: 5MB (.mp3, .wav, .ogg, .m4a)</p>
-            
-            <input type="file" id="audio-upload" accept="audio/*, .mp3, .wav, .ogg, .m4a">
-            
-            <div id="upload-progress-container" class="progress-container">
-                <div id="upload-progress-bar" class="progress-bar"></div>
-                <div class="progress-text">Sending Chunks: <span id="upload-progress-val">0</span>%</div>
-            </div>
-
-            <button class="btn btn-blue" id="submit-file-btn" type="button" onclick="sendUploadedAudio()">Send to Host</button>
-            <button class="btn btn-secondary" type="button" onclick="closeTrollModal()">Cancel</button>
-        </div>
-    </div>
-
-<script>
-    // --- CREDENCIAIS ---
-    const TUNNEL = "https://ssl-loves-comic-percent.trycloudflare.com";
-    const VIRTUAL_SERVER_KEY = "13c25d9dae";
-    
-    const socket = io(TUNNEL, { auth: { token: "default_key" } });
-
-    let myRoom = "";
-    let isHost = false;
-    let bgWorker = null;
-
-    const localTrollQueue = [];
-    let isTrollPlaying = false;
-    const CHUNK_SIZE = 100 * 1024; 
-    let currentUploadFile = null;
-    const pendingReceives = {};
-
-    let hostAudioCtx = null;
-    let hostMicStream = null;
-    let hostScriptProcessor = null;
-
-    let clientAudioCtx = null;
-    let nextPlayTime = 0; 
-
-    // --- SISTEMA DE LOGS EM TEMPO REAL ---
-    function addLog(msg) {
-        const logBox = document.getElementById('log-box');
-        if (logBox) {
-            const time = new Date().toLocaleTimeString();
-            logBox.innerHTML += `<div>[${time}] ${msg}</div>`;
-            logBox.scrollTop = logBox.scrollHeight;
-        }
-    }
-
-    // --- CONEXÃO INICIAL ---
-    socket.on('connect', () => {
-        addLog("Conectado ao núcleo central do EzBridge.");
-        addLog("Solicitando validação de chave de servidor virtual...");
-        socket.emit('join_virtual_server', { key: VIRTUAL_SERVER_KEY });
-    });
-
-    socket.on('joined_successfully', () => {
-        addLog("Validação concluída! Chave aceita.");
-        addLog("Acessando painel de controle...");
-        setTimeout(() => {
-            document.getElementById('overlay-sync').style.display = 'none';
-            document.getElementById('overlay-menu').style.display = 'flex';
-        }, 800);
-    });
-
-    socket.on('join_error', (data) => {
-        addLog(`❌ ERRO: ${data.error}`);
-    });
-
-    socket.on('connect_error', () => {
-        addLog("⚠️ Erro de conexão com o túnel. Tentando reconectar...");
-        document.getElementById('overlay-sync').style.display = 'flex';
-        document.getElementById('overlay-menu').style.display = 'none';
-    });
-
-    // --- RECEBER SCREENSYNC, STREAM DE MIC & ÁUDIO GLOBAL ---
-    socket.on('RemoteEvent', (packet) => {
-        if (!isHost && packet.type === 'sh_frame' && packet.room === myRoom) {
-            document.getElementById('remote-screen').src = packet.img;
-        }
-        
-        if (!isHost && packet.type === 'host_voice_pcm' && packet.room === myRoom) {
-            playPCMChunk(packet.pcm);
-        }
-
-        if (isHost && packet.type === 'audio_chunk' && packet.room === myRoom) {
-            handleIncomingChunk(packet);
-        }
-
-        if (!isHost && packet.type === 'audio_chunk_ack' && packet.room === myRoom) {
-            handleChunkAck(packet);
-        }
-
-        if (!isHost && packet.type === 'play_audio_global' && packet.room === myRoom) {
-            addAudioToTrollQueue(packet.data);
-        }
-
-        if (packet.type === 'close_room' && packet.room === myRoom) {
-            alert("The room was wiped by the host.");
-            location.reload();
-        }
-    });
-
-    // --- REPRODUTOR DE VOZ (AUDIO QUEUE) ---
-    function playPCMChunk(pcmArray) {
-        if (!clientAudioCtx) {
-            clientAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-            nextPlayTime = clientAudioCtx.currentTime;
-        }
-
-        if (clientAudioCtx.state === 'suspended') {
-            clientAudioCtx.resume();
-        }
-
-        const buffer = clientAudioCtx.createBuffer(1, pcmArray.length, 16000);
-        const channelData = buffer.getChannelData(0);
-        for (let i = 0; i < pcmArray.length; i++) {
-            channelData[i] = pcmArray[i];
-        }
-
-        const source = clientAudioCtx.createBufferSource();
-        source.buffer = buffer;
-        source.connect(clientAudioCtx.destination);
-
-        const currentTime = clientAudioCtx.currentTime;
-        if (nextPlayTime < currentTime) {
-            nextPlayTime = currentTime; 
-        }
-
-        source.start(nextPlayTime);
-        nextPlayTime += buffer.duration; 
-    }
-
-    // --- CONTROLES DE INTERFACE (MODALS) ---
-    function limitLength(input, max) {
-        if (input.value.length > max) input.value = input.value.slice(0, max);
-    }
-    function openCreateRoomModal() { document.getElementById('modal-create').style.display = 'flex'; }
-    function openFindRoomModal() { document.getElementById('modal-find').style.display = 'flex'; }
-    function closeModals() {
-        document.getElementById('modal-create').style.display = 'none';
-        document.getElementById('modal-find').style.display = 'none';
-    }
-    function openTrollModal() { document.getElementById('modal-troll').style.display = 'flex'; }
-    function closeTrollModal() { document.getElementById('modal-troll').style.display = 'none'; }
-    function openFileFlow() {
-        document.getElementById('modal-troll').style.display = 'none';
-        document.getElementById('modal-file').style.display = 'flex';
-    }
-    function backToTrollModal() {
-        document.getElementById('modal-file').style.display = 'none';
-        document.getElementById('modal-troll').style.display = 'flex';
-    }
-
-    // --- CAPTURADOR DE MICROFONE SEM ECO LOCAL ---
-    async function startHostMic() {
-        try {
-            hostMicStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            hostAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-            
-            const source = hostAudioCtx.createMediaStreamSource(hostMicStream);
-            hostScriptProcessor = hostAudioCtx.createScriptProcessor(4096, 1, 1);
-            
-            const muteGain = hostAudioCtx.createGain();
-            muteGain.gain.value = 0.0; 
-            
-            source.connect(hostScriptProcessor);
-            hostScriptProcessor.connect(muteGain);
-            muteGain.connect(hostAudioCtx.destination); 
-
-            hostScriptProcessor.onaudioprocess = (e) => {
-                if (!isHost || !myRoom) return;
-                const inputData = e.inputBuffer.getChannelData(0);
-                const pcmData = Array.from(inputData);
+        socket.on("RemoteEvent", (packet) => {
+            // Renderiza atualização vinda do processamento do ServerScript
+            if (packet.type === "init") {
+                mySymbol = packet.symbol;
+                isMyTurn = packet.turn;
+                document.getElementById("status").innerText = isMyTurn ? "Your Turn (" + mySymbol + ")" : "Opponent's Turn...";
+            }
+            if (packet.type === "update") {
+                const cells = document.querySelectorAll(".cell");
+                packet.board.forEach((val, idx) => { cells[idx].innerText = val || ""; });
+                isMyTurn = packet.turn;
                 
-                socket.emit('RemoteEvent', {
-                    type: 'host_voice_pcm',
-                    room: myRoom,
-                    pcm: pcmData
-                });
-            };
-
-            addLog("[Mic] Microfone do Host iniciado e sincronizado.");
-
-        } catch (err) {
-            console.warn("Permission denied or microphone not found: ", err);
-        }
-    }
-
-    // --- HOST FLOW (Create Room) ---
-    async function createRoomSubmit() {
-        const pass = document.getElementById('create-password').value;
-        if (pass.length !== 4) return alert("Password must be exactly 4 digits.");
-        
-        myRoom = pass;
-        isHost = true;
-        closeModals();
-
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { width: 854, height: 480, frameRate: 20 },
-                audio: true
-            });
-
-            document.getElementById('overlay-menu').style.display = 'none';
-            document.getElementById('screen-hosting').style.display = 'flex';
-            document.getElementById('room-code-display').innerText = myRoom;
-
-            const video = document.createElement('video');
-            video.srcObject = stream;
-            video.play();
-
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-
-            const workerCode = `
-                let timer = null;
-                self.onmessage = function(e) {
-                    if (e.data.cmd === 'start') {
-                        clearInterval(timer);
-                        timer = setInterval(() => self.postMessage('tick'), e.data.interval);
-                    } else if (e.data.cmd === 'stop') {
-                        clearInterval(timer);
-                    }
-                };
-            `;
-            const workerBlob = new Blob([workerCode], {type: 'application/javascript'});
-            bgWorker = new Worker(URL.createObjectURL(workerBlob));
-            
-            bgWorker.onmessage = function() {
-                if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                    canvas.width = 854;
-                    canvas.height = 480;
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    
-                    socket.emit('RemoteEvent', {
-                        type: 'sh_frame',
-                        room: myRoom,
-                        img: canvas.toDataURL('image/jpeg', 0.45)
-                    });
+                if (packet.winner) {
+                    document.getElementById("status").innerText = packet.winner === "T" ? "Draw!" : "Winner: " + packet.winner;
+                    isMyTurn = false;
+                } else {
+                    document.getElementById("status").innerText = isMyTurn ? "Your Turn (" + mySymbol + ")" : "Opponent's Turn...";
                 }
-            };
-
-            bgWorker.postMessage({ cmd: 'start', interval: 1000 / 20 });
-
-            startHostMic();
-
-            stream.getVideoTracks()[0].onended = () => {
-                socket.emit('RemoteEvent', { type: 'close_room', room: myRoom });
-                location.reload();
-            };
-
-        } catch (e) {
-            alert("Error starting webcam stream: " + e.message);
-            location.reload();
-        }
-    }
-
-    // --- CLIENT FLOW (Find Room) ---
-    function joinRoomSubmit() {
-        const pass = document.getElementById('find-password').value;
-        if (pass.length !== 4) return alert("Password must be exactly 4 digits.");
-        
-        myRoom = pass;
-        isHost = false;
-        closeModals();
-
-        if (!clientAudioCtx) {
-            clientAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-            nextPlayTime = clientAudioCtx.currentTime;
-        }
-
-        document.getElementById('overlay-menu').style.display = 'none';
-        document.getElementById('viewport').style.display = 'flex';
-        document.getElementById('client-room-title').innerText = `Room: ${myRoom}`;
-    }
-
-    // --- ENVIO DE ÁUDIOS (CHUNKED UPLOAD) ---
-    function sendUploadedAudio() {
-        const fileInput = document.getElementById('audio-upload');
-        if (fileInput.files.length === 0) return alert("Please select an audio file.");
-
-        const file = fileInput.files[0];
-        
-        if (file.size > 5 * 1024 * 1024) {
-            return alert("File exceeds 5MB size limit! Choose a lighter file.");
-        }
-
-        const submitBtn = document.getElementById('submit-file-btn');
-        submitBtn.disabled = true;
-        submitBtn.innerText = "Processing...";
-
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const base64Data = e.target.result;
-            const totalChunks = Math.ceil(base64Data.length / CHUNK_SIZE);
-            const fileId = 'file_' + Date.now();
-
-            currentUploadFile = {
-                id: fileId,
-                data: base64Data,
-                total: totalChunks
-            };
-
-            document.getElementById('upload-progress-container').style.display = 'block';
-            updateUploadProgress(0, totalChunks);
-            sendChunk(0);
-        };
-        reader.readAsDataURL(file);
-    }
-
-    function sendChunk(index) {
-        if (!currentUploadFile) return;
-        const start = index * CHUNK_SIZE;
-        const end = Math.min(start + CHUNK_SIZE, currentUploadFile.data.length);
-        const chunkData = currentUploadFile.data.slice(start, end);
-
-        socket.emit('RemoteEvent', {
-            type: 'audio_chunk',
-            room: myRoom,
-            fileId: currentUploadFile.id,
-            index: index,
-            total: currentUploadFile.total,
-            data: chunkData
-        });
-    }
-
-    function handleChunkAck(packet) {
-        if (!currentUploadFile || currentUploadFile.id !== packet.fileId) return;
-        const nextIndex = packet.index + 1;
-
-        if (nextIndex < currentUploadFile.total) {
-            updateUploadProgress(nextIndex, currentUploadFile.total);
-            sendChunk(nextIndex);
-        } else {
-            document.getElementById('upload-progress-container').style.display = 'none';
-            document.getElementById('submit-file-btn').disabled = false;
-            document.getElementById('submit-file-btn').innerText = "Send to Host";
-            document.getElementById('audio-upload').value = "";
-            currentTrollModalClose();
-            alert("Audio successfully transferred and broadcasting!");
-        }
-    }
-
-    // --- RECEPTOR HOST (Montagem & Transmissão Global) ---
-    function handleIncomingChunk(packet) {
-        const { fileId, index, total, data } = packet;
-
-        if (!pendingReceives[fileId]) {
-            pendingReceives[fileId] = Array(total).fill(null);
-            document.getElementById('host-progress-container').style.display = 'block';
-        }
-
-        pendingReceives[fileId][index] = data;
-
-        const receivedCount = pendingReceives[fileId].filter(c => c !== null).length;
-        const pct = Math.floor((receivedCount / total) * 100);
-        
-        // CORREGIDO: Trocado .style.style por .style.width para evitar travamento de renderização e perda de ACKs
-        document.getElementById('host-progress-bar').style.width = `${pct}%`;
-        document.getElementById('host-progress-val').innerText = pct;
-
-        socket.emit('RemoteEvent', {
-            type: 'audio_chunk_ack',
-            room: myRoom,
-            fileId: fileId,
-            index: index
+            }
         });
 
-        if (receivedCount === total) {
-            document.getElementById('host-progress-container').style.display = 'none';
-            const fullBase64 = pendingReceives[fileId].join('');
-            delete pendingReceives[fileId];
-
-            addAudioToTrollQueue(fullBase64);
-
-            socket.emit('RemoteEvent', {
-                type: 'play_audio_global',
-                room: myRoom,
-                data: fullBase64
-            });
+        function clickCell(idx) {
+            if (!isMyTurn) return;
+            // O cliente apenas solicita uma interação bruta, o ServerScript valida
+            socket.emit("RemoteEvent", { type: "client_click", index: idx, actionType: "interaction", isValidatedAction: true });
         }
-    }
-
-    function addAudioToTrollQueue(audioData) {
-        localTrollQueue.push(audioData);
-        if (!isTrollPlaying) playNextTrollAudio();
-    }
-
-    function playNextTrollAudio() {
-        if (localTrollQueue.length === 0) {
-            isTrollPlaying = false;
-            return;
-        }
-
-        isTrollPlaying = true;
-        const nextAudioData = localTrollQueue.shift();
-        const audio = new Audio(nextAudioData);
-
-        // Cronômetro de corte absoluto de 15 segundos
-        let cutoffTimer = setTimeout(() => {
-            audio.pause();
-            audio.remove();
-            console.log("[Troll] Audio cortado após limite estrito de 15s.");
-            isTrollPlaying = false;
-            playNextTrollAudio(); 
-        }, 15000);
-
-        audio.onended = () => {
-            clearTimeout(cutoffTimer);
-            audio.remove();
-            console.log("[Troll] Audio concluído naturalmente.");
-            isTrollPlaying = false;
-            playNextTrollAudio();
-        };
-
-        audio.play().catch((err) => {
-            console.error("Erro ao tocar áudio: ", err);
-            clearTimeout(cutoffTimer);
-            isTrollPlaying = false;
-            playNextTrollAudio();
-        });
-    }
-
-    function updateUploadProgress(current, total) {
-        const pct = Math.floor((current / total) * 100);
-        document.getElementById('upload-progress-bar').style.width = `${pct}%`;
-        document.getElementById('upload-progress-val').innerText = pct;
-    }
-
-    function currentTrollModalClose() {
-        document.getElementById('modal-file').style.display = 'none';
-        document.getElementById('modal-troll').style.display = 'none';
-    }
-</script>
+    </script>
 </body>
 </html>
