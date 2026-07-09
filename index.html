@@ -1,33 +1,92 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Authoritative Tic-Tac-Toe</title>
+    <meta charset="UTF-8">
+    <title>Tic-Tac-Toe</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body { background: #0c0c0e; color: #fff; font-family: sans-serif; text-align: center; }
+        .grid { display: grid; grid-template-columns: repeat(3, 100px); gap: 8px; justify-content: center; margin-top: 20px; }
+        .cell { width: 100px; height: 100px; background: #1e1e24; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; cursor: pointer; border-radius: 8px; }
+        #status { font-weight: bold; margin-top: 20px; color: #00ff88; }
+    </style>
 </head>
 <body>
-    <h2 id="status">Connecting to Host...</h2>
-    <div id="board"></div>
+    <h2>Tic-Tac-Toe</h2>
+    <div id="status">Connecting...</div>
+    <div class="grid" id="grid">
+        <div class="cell" onclick="makeMove(0)"></div>
+        <div class="cell" onclick="makeMove(1)"></div>
+        <div class="cell" onclick="makeMove(2)"></div>
+        <div class="cell" onclick="makeMove(3)"></div>
+        <div class="cell" onclick="makeMove(4)"></div>
+        <div class="cell" onclick="makeMove(5)"></div>
+        <div class="cell" onclick="makeMove(6)"></div>
+        <div class="cell" onclick="makeMove(7)"></div>
+        <div class="cell" onclick="makeMove(8)"></div>
+    </div>
+
+    <!-- SCRIPT DE SERVIDOR VIRTUAL (Server-Script sandbox):
+    // Código para colar no "Create Server Script" do painel:
+    // --------------------------------------------------
+    // let board = Array(9).fill(null);
+    // let turn = "X";
+    // onRemoteEvent = (packet, socketId) => {
+    //     if (packet.type === "ttt_move") {
+    //         board[packet.idx] = packet.symbol;
+    //         broadcast("board_update", { board: board });
+    //     }
+    // };
+    -->
 
     <script>
-        const socket = io("https://incorporate-dude-elimination-engines.trycloudflare.com");
+        const key = "b09d32d088";
+        const link = "https://cast-toolbar-five-ship.trycloudflare.com";
+        const socket = io(link, { auth: { token: "default_key" } });
+        let board = Array(9).fill("");
+        let myTurn = false;
+        let symbol = "X";
+
         socket.on("connect", () => {
-            socket.emit("join_virtual_server", { key: "ec5f7a2dde" });
+            document.getElementById("status").innerText = "Connected! Waiting opponent.";
+            socket.emit("join_virtual_server", { key });
         });
 
-        // Clique no tabuleiro de forma simples (O processamento e validação de turnos rodam no ServerScript)
-        function makeMove(idx) {
-            socket.emit("RemoteEvent", { type: "player_move", cellIndex: idx });
-        }
+        socket.on("joined_successfully", () => {
+            socket.emit("RemoteEvent", { type: "ttt_ping" });
+        });
 
         socket.on("RemoteEvent", (packet) => {
-            if (packet.type === "board_update") {
-                renderBoard(packet.board);
-                document.getElementById("status").innerText = "Turn: " + packet.turnSymbol;
+            if (packet.type === "ttt_ping") {
+                symbol = "O";
+                socket.emit("RemoteEvent", { type: "ttt_pong" });
+                startGame(true);
             }
-            if (packet.type === "game_over") {
-                alert("Winner is: " + packet.winner);
+            if (packet.type === "ttt_pong") {
+                symbol = "X";
+                startGame(false);
+            }
+            if (packet.type === "board_update") {
+                board = packet.board;
+                updateBoard();
             }
         });
+
+        function startGame(turn) {
+            myTurn = turn;
+            document.getElementById("status").innerText = myTurn ? "Your Turn (" + symbol + ")" : "Opponent Turn...";
+        }
+
+        function makeMove(idx) {
+            if (!myTurn || board[idx] !== "") return;
+            socket.emit("RemoteEvent", { type: "ttt_move", idx, symbol });
+            myTurn = false;
+        }
+
+        function updateBoard() {
+            const cells = document.querySelectorAll(".cell");
+            cells.forEach((c, i) => c.innerText = board[i] || "");
+        }
     </script>
 </body>
 </html>
