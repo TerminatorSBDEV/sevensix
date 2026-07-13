@@ -1,82 +1,32 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
     <title>Tic-Tac-Toe Client</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        body { background: #111113; color: #fff; font-family: sans-serif; text-align: center; }
+        body { background: #121214; color: #fff; text-align: center; font-family: sans-serif; }
         .grid { display: grid; grid-template-columns: repeat(3, 100px); gap: 8px; justify-content: center; margin-top: 20px; }
-        .cell { width: 100px; height: 100px; background: #1e1e24; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; cursor: pointer; border-radius: 8px; border: 1px solid #2d2d34; }
-        #status { font-weight: bold; margin-top: 20px; color: #00ff88; }
+        .cell { width: 100px; height: 100px; background: #1a1a20; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; cursor: pointer; }
     </style>
 </head>
 <body>
-    <h2>Tic-Tac-Toe</h2>
+    <h2>Multiplayer Tic-Tac-Toe</h2>
     <div id="status">Connecting...</div>
     <div class="grid" id="grid">
-        <div class="cell" onclick="makeMove(0)"></div>
+        <div class="cell" onclick="sendMove(0)"></div>
         <div class="cell" onclick="makeMove(1)"></div>
-        <div class="cell" onclick="makeMove(2)"></div>
-        <div class="cell" onclick="makeMove(3)"></div>
-        <div class="cell" onclick="makeMove(4)"></div>
-        <div class="cell" onclick="makeMove(5)"></div>
-        <div class="cell" onclick="makeMove(6)"></div>
-        <div class="cell" onclick="makeMove(7)"></div>
-        <div class="cell" onclick="makeMove(8)"></div>
+        <!-- ... cells from 0 to 8 ... -->
     </div>
-
     <script>
-        const key = "6640fbfa00";
-        const link = "https://tend-courses-reviewing-blogs.trycloudflare.com";
-        const socket = io(link, { auth: { token: "default_key" } });
-        let board = Array(9).fill("");
-        let myTurn = false;
-        let symbol = "";
-
+        const socket = io("https://theology-kay-vocal-plasma.trycloudflare.com", { auth: { token: "default_key" } });
         socket.on("connect", () => {
-            document.getElementById("status").innerText = "Connected! Joining room...";
-            socket.emit("join_virtual_server", { key });
+            socket.emit("join_virtual_server", { key: "cba498a31f" });
         });
-
-        socket.on("joined_successfully", () => {
-            // Avisa o Server Script que um jogador se conectou
-            socket.emit("RemoteEvent", { type: "player_join" });
+        socket.on("RemoteEvent", (p) => {
+            if (p.type === "board_update") render(p.board, p.status);
         });
-
-        socket.on("RemoteEvent", (packet) => {
-            if (packet.type === "init") {
-                symbol = packet.symbol;
-                myTurn = packet.turn;
-                updateStatus();
-            }
-            if (packet.type === "move_update") {
-                board = packet.board;
-                myTurn = packet.nextTurnSymbol === symbol;
-                updateBoard();
-                updateStatus();
-            }
-            if (packet.type === "game_over") {
-                board = packet.board;
-                updateBoard();
-                document.getElementById("status").innerText = packet.winner === "T" ? "Tie!" : (packet.winner === symbol ? "You Won! 🎉" : "You Lost!");
-                myTurn = false;
-            }
-        });
-
-        function makeMove(idx) {
-            if (!myTurn || board[idx] !== "") return;
-            // Envia movimento para o Server Script processar
-            socket.emit("RemoteEvent", { type: "client_move", idx, symbol });
-        }
-
-        function updateBoard() {
-            const cells = document.querySelectorAll(".cell");
-            cells.forEach((c, i) => c.innerText = board[i]);
-        }
-
-        function updateStatus() {
-            document.getElementById("status").innerText = myTurn ? "Your Turn (" + symbol + ")" : "Opponent's Turn...";
+        function sendMove(idx) {
+            socket.emit("RemoteEvent", { type: "player_move", idx: idx });
         }
     </script>
 </body>
