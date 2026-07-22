@@ -131,7 +131,6 @@
             text-shadow: 1px 1px 2px #000;
             pointer-events: none;
         }
-        /* Painel de Logs de Eventos Importantes */
         #logBox {
             position: absolute;
             top: 40px;
@@ -261,7 +260,7 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // WebSocket
+        // WebSocket Setup
         socket = io(SERVER_LINK, { auth: { token: SERVER_KEY } });
 
         socket.on("connect", () => {
@@ -279,28 +278,31 @@
             socket.emit("RemoteEvent", { type, data, room: currentRoom, sender: myId });
         }
 
+        // Receptor Global do EzBridge
         socket.on("RemoteEvent", (packet) => {
-            if (!packet.type) return;
+            if (!packet || !packet.type) return;
 
-            // Filtro de logs para não spamar com ticks do jogo
-            if (packet.type === "room_assigned" && packet.data.targetPlayer === myId) {
-                currentRoom = packet.data.room;
-                statusText.innerText = `Sala: ${currentRoom}`;
-                addLog(`Sala atribuída: ${currentRoom}`);
-                
-                // Entrar na sala
-                sendPacket("join_game", {
-                    room: currentRoom,
-                    name: nameInput.value.trim() || "Snake",
-                    color: chosenColor
-                });
-                addLog("Solicitando surgimento (join_game)...");
+            if (packet.type === "room_assigned") {
+                if (packet.data && packet.data.targetPlayer === myId) {
+                    currentRoom = packet.data.room;
+                    statusText.innerText = `Sala: ${currentRoom}`;
+                    addLog(`Sala atribuída: ${currentRoom}`);
+                    
+                    sendPacket("join_game", {
+                        room: currentRoom,
+                        name: nameInput.value.trim() || "Snake",
+                        color: chosenColor
+                    });
+                    addLog("Enviando solicitação de entrada...");
+                }
             }
 
-            if (packet.type === "spawn_confirmed" && packet.data.targetPlayer === myId) {
-                addLog("-> Servidor respondeu: " + packet.data.message);
-                isAlive = true;
-                menuUI.style.display = "none";
+            if (packet.type === "spawn_confirmed") {
+                if (packet.data && packet.data.targetPlayer === myId) {
+                    addLog("-> Respawn Confirmado!");
+                    isAlive = true;
+                    menuUI.style.display = "none";
+                }
             }
 
             if (packet.type === "world_tick") {
@@ -311,7 +313,7 @@
 
                 if (serverPlayers[myId] && serverPlayers[myId].dead && isAlive) {
                     isAlive = false;
-                    addLog("Você morreu no jogo!");
+                    addLog("Sua cobra morreu!");
                     setTimeout(() => {
                         menuUI.style.display = "flex";
                         currentRoom = null;
@@ -325,7 +327,7 @@
             sendPacket("find_room", {});
         });
 
-        // Controles de Input
+        // Controles
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Space') isSpacePressed = true;
             if (e.key.toLowerCase() === 'e') isEPressed = true;
@@ -369,7 +371,7 @@
             }
         });
 
-        // Envio de Inputs (20Hz)
+        // Loop de Inputs do Cliente (20Hz)
         setInterval(() => {
             if (currentRoom && isAlive) {
                 let targetX = mousePos.x;
@@ -394,7 +396,7 @@
             }
         }, 50);
 
-        // Loop de Renderização
+        // Renderização
         function gameLoop() {
             for (let id in serverPlayers) {
                 let sp = serverPlayers[id];
