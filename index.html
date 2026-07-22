@@ -6,138 +6,23 @@
     <title>Html snakes</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            user-select: none;
-            -webkit-user-select: none;
-            touch-action: none;
-        }
-        body, html {
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background-color: #000;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: #fff;
-        }
-        #gameCanvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1;
-        }
-        #menuUI {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 10;
-            background: rgba(0, 0, 0, 0.85);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
-        .menu-card {
-            background: #121214;
-            border: 2px solid #333;
-            border-radius: 12px;
-            padding: 24px;
-            width: 320px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.8);
-            text-align: center;
-        }
-        .menu-card h1 {
-            font-size: 2rem;
-            margin-bottom: 20px;
-            color: #fff;
-            letter-spacing: 1px;
-        }
-        .form-group {
-            margin-bottom: 16px;
-            text-align: left;
-        }
-        .form-group label {
-            display: block;
-            font-size: 0.85rem;
-            color: #aaa;
-            margin-bottom: 6px;
-        }
-        .form-group input[type="text"] {
-            width: 100%;
-            padding: 10px;
-            background: #1e1e24;
-            border: 1px solid #444;
-            border-radius: 6px;
-            color: #fff;
-            font-size: 1rem;
-            outline: none;
-        }
-        .color-sliders {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .color-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 0.8rem;
-        }
-        .color-row input[type="range"] {
-            flex: 1;
-        }
-        .color-preview {
-            width: 100%;
-            height: 20px;
-            border-radius: 4px;
-            margin-top: 8px;
-            border: 1px solid #555;
-        }
-        button.btn-spawn {
-            width: 100%;
-            padding: 12px;
-            margin-top: 16px;
-            background: #28a745;
-            border: none;
-            border-radius: 6px;
-            color: #fff;
-            font-size: 1.1rem;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        button.btn-spawn:hover {
-            background: #218838;
-        }
-        #minimap {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            width: 150px;
-            height: 150px;
-            background: rgba(0, 0, 0, 0.6);
-            border: 2px solid #555;
-            border-radius: 8px;
-            z-index: 5;
-            pointer-events: none;
-        }
-        #statusText {
-            position: absolute;
-            top: 15px;
-            left: 15px;
-            z-index: 5;
-            font-size: 0.9rem;
-            color: #00ff88;
-            font-weight: bold;
-            text-shadow: 1px 1px 2px #000;
-            pointer-events: none;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; touch-action: none; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background-color: #000; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #fff; }
+        #gameCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        #menuUI { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; background: rgba(0, 0, 0, 0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .menu-card { background: #121214; border: 2px solid #333; border-radius: 12px; padding: 24px; width: 320px; box-shadow: 0 8px 24px rgba(0,0,0,0.8); text-align: center; }
+        .menu-card h1 { font-size: 2rem; margin-bottom: 20px; color: #fff; letter-spacing: 1px; }
+        .form-group { margin-bottom: 16px; text-align: left; }
+        .form-group label { display: block; font-size: 0.85rem; color: #aaa; margin-bottom: 6px; }
+        .form-group input[type="text"] { width: 100%; padding: 10px; background: #1e1e24; border: 1px solid #444; border-radius: 6px; color: #fff; font-size: 1rem; outline: none; }
+        .color-sliders { display: flex; flex-direction: column; gap: 8px; }
+        .color-row { display: flex; align-items: center; gap: 10px; font-size: 0.8rem; }
+        .color-row input[type="range"] { flex: 1; }
+        .color-preview { width: 100%; height: 20px; border-radius: 4px; margin-top: 8px; border: 1px solid #555; }
+        button.btn-spawn { width: 100%; padding: 12px; margin-top: 16px; background: #28a745; border: none; border-radius: 6px; color: #fff; font-size: 1.1rem; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+        button.btn-spawn:hover { background: #218838; }
+        #minimap { position: absolute; bottom: 20px; right: 20px; width: 150px; height: 150px; background: rgba(0, 0, 0, 0.6); border: 2px solid #555; border-radius: 8px; z-index: 5; pointer-events: none; }
+        #statusText { position: absolute; top: 15px; left: 15px; z-index: 5; font-size: 0.9rem; color: #00ff88; font-weight: bold; text-shadow: 1px 1px 2px #000; pointer-events: none; }
     </style>
 </head>
 <body>
@@ -201,18 +86,16 @@
         const nameInput = document.getElementById('pName');
         const spawnBtn = document.getElementById('spawnBtn');
 
-        let myId = Math.random().toString(36).substring(2, 9);
+        let myId = null;
         let currentRoom = null;
         let isAlive = false;
         let socket = null;
         let chosenColor = '#808080';
 
-        // Estado do mundo recebido do servidor e renderizado com LERP
         let serverPlayers = {};
         let renderPlayers = {};
         let foods = [];
 
-        // Input
         let targetAngle = 0;
         let isSpacePressed = false;
         let isEPressed = false;
@@ -243,7 +126,6 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // WebSocket Setup
         socket = io(SERVER_LINK, { auth: { token: SERVER_KEY } });
 
         socket.on("connect", () => {
@@ -252,57 +134,53 @@
         });
 
         socket.on("joined_successfully", () => {
-            statusText.innerText = "Online. Pronto para jogar.";
+            statusText.innerText = "Online. Obtendo ID...";
+            socket.emit("RemoteEvent", { type: "ebuserid_get" });
         });
 
-        socket.on("join_error", (err) => {
-            statusText.innerText = "Erro ao conectar: " + err.error;
-        });
-
-        function sendPacket(type, data) {
-            socket.emit("RemoteEvent", { type, data, room: currentRoom, sender: myId });
+        function sendRemote(type, payload) {
+            socket.emit("RemoteEvent", { type: type, data: payload });
         }
 
         socket.on("RemoteEvent", (packet) => {
-            if (!packet.type) return;
+            if (packet.type === "userid_response") {
+                myId = packet.userId;
+                statusText.innerText = "Pronto para jogar!";
+            }
 
-            if (packet.type === "room_assigned" && packet.sender === myId) {
+            if (packet.type === "room_assigned" && packet.targetUser === myId) {
                 currentRoom = packet.room;
                 statusText.innerText = `Servidor: ${currentRoom}`;
                 
-                // Entra na sala no servidor autoritativo
-                sendPacket("join_game", {
-                    id: myId,
+                sendRemote("join_game", {
+                    room: currentRoom,
                     name: nameInput.value.trim() || "Snake",
                     color: chosenColor
                 });
                 isAlive = true;
             }
 
-            if (packet.room !== currentRoom) return;
-
-            // Recebimento do Tick do Mundo enviado pelo servidor
             if (packet.type === "world_tick") {
-                serverPlayers = packet.data.players;
-                foods = packet.data.foods;
+                if (packet.room !== currentRoom) return;
+                serverPlayers = packet.players;
+                foods = packet.foods;
 
-                // Checar se morreu no servidor
-                if (serverPlayers[myId] && serverPlayers[myId].dead && isAlive) {
+                if (myId && serverPlayers[myId] && serverPlayers[myId].dead && isAlive) {
                     isAlive = false;
                     setTimeout(() => {
                         menuUI.style.display = "flex";
                         currentRoom = null;
-                    }, 2000); // POV preso 2s antes do menu
+                    }, 2000);
                 }
             }
         });
 
         spawnBtn.addEventListener('click', () => {
+            if (!myId) return;
             menuUI.style.display = "none";
-            sendPacket("find_room", {});
+            sendRemote("find_room", {});
         });
 
-        // Controles de Input
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Space') isSpacePressed = true;
             if (e.key.toLowerCase() === 'e') isEPressed = true;
@@ -348,7 +226,6 @@
             }
         });
 
-        // Envio constante de Inputs para o servidor (20Hz)
         setInterval(() => {
             if (currentRoom && isAlive) {
                 let targetX = mousePos.x;
@@ -365,23 +242,22 @@
 
                 let wantsSprint = isSpacePressed || isEPressed || (touchSprintId !== null);
 
-                sendPacket("player_input", {
+                sendRemote("player_input", {
+                    room: currentRoom,
                     targetAngle: targetAngle,
                     wantsSprint: wantsSprint
                 });
             }
         }, 50);
 
-        // Loop de Renderização e Interpolação (LERP) no Cliente
         function gameLoop() {
-            // Atualiza interpolação local das posições vindas do servidor
             for (let id in serverPlayers) {
                 let sp = serverPlayers[id];
                 if (!renderPlayers[id]) {
                     renderPlayers[id] = JSON.parse(JSON.stringify(sp));
                 } else {
                     let rp = renderPlayers[id];
-                    rp.x += (sp.x - rp.x) * 0.3; // LERP
+                    rp.x += (sp.x - rp.x) * 0.3;
                     rp.y += (sp.y - rp.y) * 0.3;
                     rp.angle += (sp.angle - rp.angle) * 0.3;
                     rp.score = sp.score;
@@ -391,7 +267,6 @@
                 }
             }
 
-            // Remove desconectados
             for (let id in renderPlayers) {
                 if (!serverPlayers[id]) delete renderPlayers[id];
             }
@@ -403,7 +278,6 @@
         function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Câmera presa na cobra do jogador local
             let myP = renderPlayers[myId] || { x: MAP_SIZE / 2, y: MAP_SIZE / 2 };
             const camX = myP.x - canvas.width / 2;
             const camY = myP.y - canvas.height / 2;
@@ -411,7 +285,6 @@
             ctx.save();
             ctx.translate(-camX, -camY);
 
-            // Fundo e Grade
             ctx.fillStyle = "#000000";
             ctx.fillRect(0, 0, MAP_SIZE, MAP_SIZE);
 
@@ -424,12 +297,10 @@
                 ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(MAP_SIZE, y); ctx.stroke();
             }
 
-            // Borda Vermelha Quadrada
             ctx.strokeStyle = "#ff0000";
             ctx.lineWidth = 8;
             ctx.strokeRect(0, 0, MAP_SIZE, MAP_SIZE);
 
-            // Desenhar Comidas
             for (let f of foods) {
                 ctx.fillStyle = f.color;
                 ctx.beginPath();
@@ -437,14 +308,11 @@
                 ctx.fill();
             }
 
-            // Desenhar Todas as Cobras
             for (let id in renderPlayers) {
                 drawSnake(renderPlayers[id]);
             }
 
             ctx.restore();
-
-            // Minimapa
             renderMinimap();
         }
 
@@ -459,7 +327,6 @@
 
             const size = 10 + p.score * 0.1;
 
-            // Desenhar Corpo
             ctx.fillStyle = p.color;
             for (let i = p.trail.length - 1; i >= 0; i--) {
                 let seg = p.trail[i];
@@ -468,19 +335,16 @@
                 ctx.fill();
             }
 
-            // Desenhar Cabeça e Olhos
             const head = p.trail[0] || { x: p.x, y: p.y };
             ctx.save();
             ctx.translate(head.x, head.y);
             ctx.rotate(p.angle);
 
-            // Olho Esquerdo
             ctx.fillStyle = "#fff";
             ctx.beginPath(); ctx.arc(size * 0.5, -size * 0.5, size * 0.35, 0, Math.PI * 2); ctx.fill();
             ctx.fillStyle = "#000";
             ctx.beginPath(); ctx.arc(size * 0.65, -size * 0.5, size * 0.18, 0, Math.PI * 2); ctx.fill();
 
-            // Olho Direito
             ctx.fillStyle = "#fff";
             ctx.beginPath(); ctx.arc(size * 0.5, size * 0.5, size * 0.35, 0, Math.PI * 2); ctx.fill();
             ctx.fillStyle = "#000";
@@ -488,7 +352,6 @@
 
             ctx.restore();
 
-            // Nome
             ctx.fillStyle = "#ffffff";
             ctx.font = "12px sans-serif";
             ctx.textAlign = "center";
