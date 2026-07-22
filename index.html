@@ -183,9 +183,6 @@
         const SERVER_LINK = "https://authentic-boss-temporal-shipped.trycloudflare.com";
         const MAP_SIZE = 4000;
         const GRID_SIZE = 100;
-        const MAX_SERVERS = 100;
-        const MAX_PLAYERS_PER_ROOM = 20;
-        const MAX_NATURAL_FOOD = 500;
         const TURN_SPEED = 0.08; // Medium speed turning
 
         // DOM Elements
@@ -208,7 +205,6 @@
 
         let myId = Math.random().toString(36).substring(2, 9);
         let currentRoom = null;
-        let isHost = false;
         let isAlive = false;
         let socket = null;
 
@@ -230,7 +226,7 @@
 
         let remotePlayers = {};
         let foods = [];
-        let roomPlayersCount = {};
+        let availableRooms = {};
 
         // Mobile Controls Data
         let touchMoveId = null;
@@ -267,45 +263,47 @@
         socket = io(SERVER_LINK, { auth: { token: "default_key" } });
 
         socket.on("connect", () => {
-            statusText.innerText = "Conectado. Entrando no cluster...";
+            statusText.innerText = "Conectado. Entrando no servidor...";
             socket.emit("join_virtual_server", { key: SERVER_KEY });
         });
 
         socket.on("joined_successfully", () => {
-            statusText.innerText = "Online. Buscando salas...";
-            // Anuncia a própria presença para mapear salas existentes
-            sendPacket("ping_rooms", { sender: myId });
+            statusText.innerText = "Online. Pronto para jogar.";
+            fetchServerRooms();
         });
 
         socket.on("join_error", (err) => {
             statusText.innerText = "Erro: " + err.error;
         });
 
-        function sendPacket(type, data) {
-            socket.emit("RemoteEvent", { type, data, room: currentRoom, sender: myId });
+        function sendPacket(type, payloadData = {}) {
+            socket.emit("RemoteEvent", {
+                type: type,
+                room: currentRoom,
+                sender: myId,
+                data: payloadData
+            });
+        }
+
+        function fetchServerRooms() {
+            socket.emit("RemoteEvent", { type: "ping_rooms", sender: myId });
         }
 
         socket.on("RemoteEvent", (packet) => {
-            if (!packet.type) return;
+            if (!packet || !packet.type) return;
 
-            // Mapeamento de descoberta de salas ativas
-            if (packet.type === "ping_rooms") {
-                if (isHost && currentRoom) {
-                    const count = Object.keys(remotePlayers).length + 1;
-                    sendPacket("pong_room", { room: currentRoom, count });
-                }
-            }
-
-            if (packet.type === "pong_room" && packet.data) {
-                roomPlayersCount[packet.data.room] = packet.data.count;
+            // Retorno das salas ativas no servidor
+            if (packet.type === "room_list_response" && packet.sender === myId) {
+                availableRooms = packet.rooms || {};
+                joinAvailableRoomOrCreate();
             }
 
             if (packet.room !== currentRoom) return;
 
-            // Eventos do jogo na sala atual
+            // Atualização de Jogadores Remotos
             if (packet.type === "state_update") {
                 const data = packet.data;
-                if (data.id === myId) return;
+                if (!data || data.id === myId) return;
 
                 if (!remotePlayers[data.id]) {
                     remotePlayers[data.id] = { ...data, targetX: data.x, targetY: data.y, targetAngle: data.angle };
@@ -324,37 +322,40 @@
                 }
             }
 
+            // Sincronização de Comidas pelo Servidor
             if (packet.type === "food_sync") {
-                foods = packet.data;
-            }
-
-            if (packet.type === "player_died") {
-                if (packet.data.id === myId && isAlive) {
-                    killLocalPlayer(packet.data.wall || false);
+                if (Array.isArray(packet.data)) {
+                    foods = packet.data;
                 }
             }
 
+            // Saída de Jogadores
             if (packet.type === "leave_room") {
-                delete remotePlayers[packet.data.id];
+                if (packet.data && packet.data.id) {
+                    delete remotePlayers[packet.data.id];
+                }
             }
         });
 
-        // --- Room Matchmaking ---
+        // --- Matchmaking ---
         function matchmakeAndSpawn() {
+            spawnBtn.disabled = true;
+            statusText.innerText = "Buscando servidor...";
+            fetchServerRooms();
+        }
+
+        function joinAvailableRoomOrCreate() {
             let selectedRoom = null;
-            // Procura sala existente com vaga
-            for (let r in roomPlayersCount) {
-                if (roomPlayersCount[r] < MAX_PLAYERS_PER_ROOM) {
-                    selectedRoom = r;
+
+            for (let rId in availableRooms) {
+                if (availableRooms[rId] < 20) {
+                    selectedRoom = rId;
                     break;
                 }
             }
 
             if (!selectedRoom) {
                 selectedRoom = "room_" + Math.random().toString(36).substring(2, 9);
-                isHost = true;
-            } else {
-                isHost = false;
             }
 
             currentRoom = selectedRoom;
@@ -365,43 +366,15 @@
             localPlayer.trail = [];
             localPlayer.dead = false;
             localPlayer.fadeAlpha = 1.0;
+            remotePlayers = {};
             isAlive = true;
 
             menuUI.style.display = "none";
-            statusText.innerText = `Sala: ${currentRoom}`;
-
-            if (isHost && foods.length === 0) {
-                spawnInitialFoods();
-            }
+            spawnBtn.disabled = false;
+            statusText.innerText = `Servidor: ${currentRoom}`;
         }
 
         spawnBtn.addEventListener('click', matchmakeAndSpawn);
-
-        // --- Foods Spawner ---
-        function spawnInitialFoods() {
-            foods = [];
-            for (let i = 0; i < 200; i++) {
-                addFood();
-            }
-        }
-
-        function addFood(x, y, val = 1) {
-            foods.push({
-                x: x !== undefined ? x : Math.random() * (MAP_SIZE - 40) + 20,
-                y: y !== undefined ? y : Math.random() * (MAP_SIZE - 40) + 20,
-                val: val,
-                color: `hsl(${Math.random() * 360}, 100%, 50%)`
-            });
-        }
-
-        setInterval(() => {
-            if (isHost && isAlive) {
-                if (foods.length < MAX_NATURAL_FOOD) {
-                    addFood();
-                    sendPacket("food_sync", foods);
-                }
-            }
-        }, 10); // 0.01s
 
         // --- Controls ---
         window.addEventListener('keydown', (e) => {
@@ -420,7 +393,7 @@
             mousePos.y = e.clientY;
         });
 
-        // Touch Input
+        // Touch Controls
         window.addEventListener('touchstart', (e) => {
             for (let i = 0; i < e.changedTouches.length; i++) {
                 let t = e.changedTouches[i];
@@ -450,14 +423,19 @@
             }
         });
 
-        // --- Sprint Logic Timer ---
+        // Sprint Timer (Consome 1 comida a cada 0.3s)
         setInterval(() => {
             if (isAlive && localPlayer.sprinting && localPlayer.score >= 6) {
                 localPlayer.score -= 1;
-                // Deixa comida pra trás
                 if (localPlayer.trail.length > 0) {
                     const tail = localPlayer.trail[localPlayer.trail.length - 1];
-                    addFood(tail.x, tail.y, 1);
+                    foods.push({
+                        id: Math.random().toString(36).substring(2, 7),
+                        x: tail.x,
+                        y: tail.y,
+                        val: 1,
+                        color: `hsl(${Math.floor(Math.random() * 360)}, 100%, 50%)`
+                    });
                     sendPacket("food_sync", foods);
                 }
             }
@@ -478,7 +456,6 @@
 
         function update(dt) {
             if (isAlive && !localPlayer.dead) {
-                // Direção / Ângulo
                 let targetX = mousePos.x;
                 let targetY = mousePos.y;
 
@@ -494,37 +471,36 @@
 
                 localPlayer.targetAngle = Math.atan2(dy, dx);
 
-                // Lerp do ângulo para rotação suave (medium speed turning)
+                // Medium Speed Turning
                 let diff = localPlayer.targetAngle - localPlayer.angle;
                 while (diff < -Math.PI) diff += Math.PI * 2;
                 while (diff > Math.PI) diff -= Math.PI * 2;
                 localPlayer.angle += diff * TURN_SPEED;
 
-                // Checagem de sprint
+                // Checagem de Sprint
                 const wantsSprint = isSpacePressed || isEPressed || (touchSprintId !== null);
                 localPlayer.sprinting = wantsSprint && localPlayer.score >= 6;
 
-                // Velocidade
-                let speed = 180; // base speed
-                if (localPlayer.sprinting) speed *= 1.5; // +50%
+                let speed = 180;
+                if (localPlayer.sprinting) speed *= 1.5;
 
-                // Movimentação
+                // Movimento
                 localPlayer.x += Math.cos(localPlayer.angle) * speed * dt;
                 localPlayer.y += Math.sin(localPlayer.angle) * speed * dt;
 
-                // Histórico de rastro/corpo
+                // Rastro do corpo
                 localPlayer.trail.unshift({ x: localPlayer.x, y: localPlayer.y });
                 const maxLength = Math.floor(localPlayer.score * 5);
                 if (localPlayer.trail.length > maxLength) {
                     localPlayer.trail.pop();
                 }
 
-                // Colisão com as bordas (Parede vermelha)
+                // Colisão com Bordas
                 if (localPlayer.x <= 0 || localPlayer.x >= MAP_SIZE || localPlayer.y <= 0 || localPlayer.y >= MAP_SIZE) {
                     killLocalPlayer(true);
                 }
 
-                // Colisão com alimentos
+                // Colisão com Alimentos
                 const headRadius = 12 + localPlayer.score * 0.1;
                 for (let i = foods.length - 1; i >= 0; i--) {
                     let f = foods[i];
@@ -536,10 +512,10 @@
                     }
                 }
 
-                // Colisão de cabeça com o corpo de outros jogadores
+                // Colisão com outras cobras
                 for (let id in remotePlayers) {
                     let p = remotePlayers[id];
-                    if (p.dead) continue;
+                    if (p.dead || !p.trail) continue;
                     for (let seg of p.trail) {
                         let dist = Math.hypot(localPlayer.x - seg.x, localPlayer.y - seg.y);
                         if (dist < headRadius) {
@@ -549,7 +525,7 @@
                     }
                 }
 
-                // Transmissão do Estado
+                // Transmissão do Estado para o Servidor
                 sendPacket("state_update", {
                     id: myId,
                     name: localPlayer.name,
@@ -564,18 +540,17 @@
                     fadeAlpha: localPlayer.fadeAlpha
                 });
             } else if (localPlayer.dead) {
-                // Efeito Fade-out do jogador local morto
                 if (localPlayer.fadeAlpha > 0) {
-                    localPlayer.fadeAlpha -= dt * 2; // 0.5s fade out
+                    localPlayer.fadeAlpha -= dt * 2; // 0.5s
                     if (localPlayer.fadeAlpha < 0) localPlayer.fadeAlpha = 0;
                 }
             }
 
-            // Atualização e Interpolação Linear (LERP) dos outros jogadores em tempo real
+            // Lerp para Interpolação Online dos Outros Jogadores
             for (let id in remotePlayers) {
                 let p = remotePlayers[id];
                 if (p.targetX !== undefined) {
-                    p.x += (p.targetX - p.x) * 0.3; // linear lerp
+                    p.x += (p.targetX - p.x) * 0.3;
                     p.y += (p.targetY - p.y) * 0.3;
                     p.angle += (p.targetAngle - p.angle) * 0.3;
                 }
@@ -586,11 +561,16 @@
             if (localPlayer.dead) return;
             localPlayer.dead = true;
 
-            // Se morreu na parede, não dropa comida. Se colidiu em jogador, vira comida.
             if (!hitWall) {
                 for (let i = 0; i < localPlayer.trail.length; i += 3) {
                     let seg = localPlayer.trail[i];
-                    addFood(seg.x + (Math.random() * 10 - 5), seg.y + (Math.random() * 10 - 5), 1);
+                    foods.push({
+                        id: Math.random().toString(36).substring(2, 7),
+                        x: seg.x + (Math.random() * 10 - 5),
+                        y: seg.y + (Math.random() * 10 - 5),
+                        val: 1,
+                        color: `hsl(${Math.floor(Math.random() * 360)}, 100%, 50%)`
+                    });
                 }
                 sendPacket("food_sync", foods);
             }
@@ -608,30 +588,30 @@
                 fadeAlpha: 1.0
             });
 
-            // Mantém POV preso por 2 segundos e retorna ao menu sem refresh
             setTimeout(() => {
                 isAlive = false;
                 sendPacket("leave_room", { id: myId });
                 currentRoom = null;
                 menuUI.style.display = "flex";
+                statusText.innerText = "Online. Pronto para jogar.";
             }, 2000);
         }
 
-        // --- Rendering ---
+        // --- Renderização ---
         function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Câmera focalizada no jogador local
             const camX = localPlayer.x - canvas.width / 2;
             const camY = localPlayer.y - canvas.height / 2;
 
             ctx.save();
             ctx.translate(-camX, -camY);
 
-            // Fundo e Grade Cinza
+            // Fundo
             ctx.fillStyle = "#000000";
             ctx.fillRect(0, 0, MAP_SIZE, MAP_SIZE);
 
+            // Grade Cinza
             ctx.strokeStyle = "#222222";
             ctx.lineWidth = 1;
             for (let x = 0; x <= MAP_SIZE; x += GRID_SIZE) {
@@ -652,27 +632,26 @@
             ctx.lineWidth = 8;
             ctx.strokeRect(0, 0, MAP_SIZE, MAP_SIZE);
 
-            // Desenhar Comidas
+            // Alimentos
             for (let f of foods) {
-                ctx.fillStyle = f.color;
+                ctx.fillStyle = f.color || "#00ff88";
                 ctx.beginPath();
-                ctx.arc(f.x, f.y, 4 + f.val, 0, Math.PI * 2);
+                ctx.arc(f.x, f.y, 4 + (f.val || 1), 0, Math.PI * 2);
                 ctx.fill();
             }
 
-            // Desenhar Cobras Remotas
+            // Jogadores Remotos
             for (let id in remotePlayers) {
                 drawSnake(remotePlayers[id]);
             }
 
-            // Desenhar Cobra Local
+            // Jogador Local
             if (isAlive || localPlayer.dead) {
                 drawSnake(localPlayer);
             }
 
             ctx.restore();
 
-            // Minimapa
             renderMinimap();
         }
 
@@ -696,13 +675,13 @@
                 ctx.fill();
             }
 
-            // Cabeça e Olhos orientados para a direção
+            // Cabeça e Olhos
             const head = p.trail[0] || { x: p.x, y: p.y };
             ctx.save();
             ctx.translate(head.x, head.y);
             ctx.rotate(p.angle);
 
-            // Olho esquerdo
+            // Olho Esquerdo
             ctx.fillStyle = "#fff";
             ctx.beginPath();
             ctx.arc(size * 0.5, -size * 0.5, size * 0.35, 0, Math.PI * 2);
@@ -712,7 +691,7 @@
             ctx.arc(size * 0.65, -size * 0.5, size * 0.18, 0, Math.PI * 2);
             ctx.fill();
 
-            // Olho direito
+            // Olho Direito
             ctx.fillStyle = "#fff";
             ctx.beginPath();
             ctx.arc(size * 0.5, size * 0.5, size * 0.35, 0, Math.PI * 2);
@@ -724,7 +703,7 @@
 
             ctx.restore();
 
-            // Nome do Jogador
+            // Nome
             ctx.fillStyle = "#ffffff";
             ctx.font = "12px sans-serif";
             ctx.textAlign = "center";
@@ -737,7 +716,6 @@
             mctx.clearRect(0, 0, 150, 150);
             const scale = 150 / MAP_SIZE;
 
-            // Jogador Local
             if (isAlive && !localPlayer.dead) {
                 mctx.fillStyle = localPlayer.color;
                 mctx.beginPath();
@@ -745,7 +723,6 @@
                 mctx.fill();
             }
 
-            // Outras Cobras
             for (let id in remotePlayers) {
                 let p = remotePlayers[id];
                 if (!p.dead) {
@@ -757,7 +734,6 @@
             }
         }
 
-        // Loop Inicial
         requestAnimationFrame(gameLoop);
     </script>
 </body>
