@@ -179,13 +179,12 @@
     </div>
 
     <script>
-        const SERVER_KEY = "ee02879679";
-        const SERVER_LINK = "https://authentic-boss-temporal-shipped.trycloudflare.com";
+        const SERVER_KEY = "146cf8ce56";
+        const SERVER_LINK = "https://boc-psi-displays-expensive.trycloudflare.com";
         const MAP_SIZE = 4000;
         const GRID_SIZE = 100;
-        const TURN_SPEED = 0.08; // Medium speed turning
 
-        // DOM Elements
+        // Elementos DOM
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const minimapCanvas = document.getElementById('minimap');
@@ -203,35 +202,26 @@
         const nameInput = document.getElementById('pName');
         const spawnBtn = document.getElementById('spawnBtn');
 
-        let myId = Math.random().toString(36).substring(2, 9);
-        let isAlive = false;
         let socket = null;
+        let isConnected = false;
+        let isAlive = false;
+        let myPlayerColor = "#808080";
 
-        // Estado do Jogador Local
-        let localPlayer = {
-            id: myId,
-            name: '',
-            color: '#808080',
-            x: 0,
-            y: 0,
-            angle: 0,
-            targetAngle: 0,
-            score: 5,
-            sprinting: false,
-            trail: [],
-            dead: false,
-            fadeAlpha: 1.0
-        };
+        // Estado do Jogo (Enviado pelo Servidor)
+        let snakesState = {};
+        let foodsState = [];
+        let cameraTarget = { x: MAP_SIZE / 2, y: MAP_SIZE / 2 };
 
-        let remotePlayers = {};
-        let foods = [];
+        // Entrada do usuário
+        let currentInput = { targetAngle: 0, wantSprint: false };
 
-        // Controles de Toque / Teclas
+        // Controles Mobile / PC
         let touchMoveId = null;
         let touchMovePos = { x: 0, y: 0 };
         let touchSprintId = null;
         let isSpacePressed = false;
         let isEPressed = false;
+        let mousePos = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
 
         function updateColorPreview() {
             const r = parseInt(rInput.value);
@@ -240,9 +230,8 @@
             rVal.innerText = Math.round((r / 255) * 100) + '%';
             gVal.innerText = Math.round((g / 255) * 100) + '%';
             bVal.innerText = Math.round((b / 255) * 100) + '%';
-            const hex = `rgb(${r},${g},${b})`;
-            colorPreview.style.backgroundColor = hex;
-            localPlayer.color = hex;
+            myPlayerColor = `rgb(${r},${g},${b})`;
+            colorPreview.style.backgroundColor = myPlayerColor;
         }
 
         rInput.addEventListener('input', updateColorPreview);
@@ -261,12 +250,13 @@
         socket = io(SERVER_LINK, { auth: { token: "default_key" } });
 
         socket.on("connect", () => {
-            statusText.innerText = "Conectado. Entrando no servidor...";
+            statusText.innerText = "Conectado. Autenticando...";
             socket.emit("join_virtual_server", { key: SERVER_KEY });
         });
 
         socket.on("joined_successfully", () => {
-            statusText.innerText = "Online";
+            isConnected = true;
+            statusText.innerText = "Conectado ao Servidor do Jogo.";
         });
 
         socket.on("join_error", (err) => {
@@ -274,66 +264,75 @@
         });
 
         function sendRemoteEvent(type, data) {
-            socket.emit("RemoteEvent", { type, data, sender: myId });
+            if (!isConnected) return;
+            socket.emit("RemoteEvent", { type, data });
         }
 
         socket.on("RemoteEvent", (packet) => {
-            if (!packet || !packet.type) return;
+            if (!packet.type) return;
 
-            // Atualização de Estado dos Jogadores
-            if (packet.type === "state_update") {
-                const data = packet.data;
-                if (!data || data.id === myId) return;
+            // Sincronização do Mundo Enviada pelo Servidor
+            if (packet.type === "world_tick") {
+                const world = packet.data;
+                foodsState = world.foods || [];
 
-                if (!remotePlayers[data.id]) {
-                    remotePlayers[data.id] = { ...data, targetX: data.x, targetY: data.y, targetAngle: data.angle };
-                } else {
-                    let p = remotePlayers[data.id];
-                    p.targetX = data.x;
-                    p.targetY = data.y;
-                    p.targetAngle = data.angle;
-                    p.score = data.score;
-                    p.color = data.color;
-                    p.name = data.name;
-                    p.trail = data.trail;
-                    p.sprinting = data.sprinting;
-                    p.dead = data.dead;
-                    p.fadeAlpha = data.fadeAlpha;
+                // Interpolação Linear (LERP) das Posições das Cobras para Suavizar Latência
+                for (let id in world.snakes) {
+                    const serverSnake = world.snakes[id];
+                    if (!snakesState[id]) {
+                        snakesState[id] = serverSnake;
+                    } else {
+                        let localSnake = snakesState[id];
+                        localSnake.x += (serverSnake.x - localSnake.x) * 0.4;
+                        localSnake.y += (serverSnake.y - localSnake.y) * 0.4;
+                        localSnake.angle += (serverSnake.angle - localSnake.angle) * 0.4;
+                        localSnake.score = serverSnake.score;
+                        localSnake.color = serverSnake.color;
+                        localSnake.name = serverSnake.name;
+                        localSnake.dead = serverSnake.dead;
+                        localSnake.fadeAlpha = serverSnake.fadeAlpha;
+                        localSnake.trail = serverSnake.trail;
+                    }
+                }
+
+                // Limpa cobras deletadas do estado local
+                for (let id in snakesState) {
+                    if (!world.snakes[id]) {
+                        delete snakesState[id];
+                    }
+                }
+
+                // Câmera focaliza no jogador local
+                if (snakesState[socket.id]) {
+                    cameraTarget.x = snakesState[socket.id].x;
+                    cameraTarget.y = snakesState[socket.id].y;
                 }
             }
 
-            // Sincronização de Alimentos
-            if (packet.type === "food_sync") {
-                foods = packet.data || [];
-            }
-
-            // Desconexão/Saída de Jogador
-            if (packet.type === "leave_room") {
-                if (packet.data && packet.data.id) {
-                    delete remotePlayers[packet.data.id];
+            if (packet.type === "player_died") {
+                if (packet.data.id === socket.id) {
+                    // Câmera fica fixa onde morreu por 2 segundos
+                    setTimeout(() => {
+                        isAlive = false;
+                        menuUI.style.display = "flex";
+                    }, 2000);
                 }
             }
         });
 
-        function spawnPlayer() {
-            localPlayer.name = nameInput.value.trim() || "Snake";
-            localPlayer.x = Math.random() * (MAP_SIZE - 400) + 200;
-            localPlayer.y = Math.random() * (MAP_SIZE - 400) + 200;
-            localPlayer.score = 5;
-            localPlayer.trail = [];
-            localPlayer.dead = false;
-            localPlayer.fadeAlpha = 1.0;
-            isAlive = true;
-
+        // --- Botão de Spawn ---
+        spawnBtn.addEventListener('click', () => {
+            if (!isConnected) return;
+            const name = nameInput.value.trim() || "Snake";
+            sendRemoteEvent("request_spawn", {
+                name: name,
+                color: myPlayerColor
+            });
             menuUI.style.display = "none";
-            
-            // Notifica o ServerScript da entrada
-            sendRemoteEvent("player_join", { id: myId, name: localPlayer.name });
-        }
+            isAlive = true;
+        });
 
-        spawnBtn.addEventListener('click', spawnPlayer);
-
-        // --- Controles de Teclado e Celular ---
+        // --- Gerenciamento de Entradas (Teclado, Mouse, Touch) ---
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Space') isSpacePressed = true;
             if (e.key.toLowerCase() === 'e') isEPressed = true;
@@ -344,13 +343,11 @@
             if (e.key.toLowerCase() === 'e') isEPressed = false;
         });
 
-        let mousePos = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
         window.addEventListener('mousemove', (e) => {
             mousePos.x = e.clientX;
             mousePos.y = e.clientY;
         });
 
-        // Controles de Toque para Celular
         window.addEventListener('touchstart', (e) => {
             for (let i = 0; i < e.changedTouches.length; i++) {
                 let t = e.changedTouches[i];
@@ -380,178 +377,56 @@
             }
         });
 
-        // Loop de Sprint (consome 1 de vida a cada 0.3s)
+        // Envia as entradas do cliente para o servidor 30 vezes por segundo
         setInterval(() => {
-            if (isAlive && localPlayer.sprinting && localPlayer.score >= 6) {
-                localPlayer.score -= 1;
-                // Notifica o ServerScript para largar comida
-                if (localPlayer.trail.length > 0) {
-                    const tail = localPlayer.trail[localPlayer.trail.length - 1];
-                    sendRemoteEvent("drop_food", { x: tail.x, y: tail.y, val: 1 });
-                }
-            }
-        }, 300);
+            if (!isAlive || !isConnected) return;
 
-        // --- Loop Principal de Física e Renderização ---
-        let lastTime = performance.now();
+            let targetX = mousePos.x;
+            let targetY = mousePos.y;
 
-        function gameLoop(now) {
-            let dt = (now - lastTime) / 1000;
-            lastTime = now;
-
-            update(dt);
-            render();
-
-            requestAnimationFrame(gameLoop);
-        }
-
-        function update(dt) {
-            if (isAlive && !localPlayer.dead) {
-                // Cálculo de Direção
-                let targetX = mousePos.x;
-                let targetY = mousePos.y;
-
-                if (touchMoveId !== null) {
-                    targetX = touchMovePos.x;
-                    targetY = touchMovePos.y;
-                }
-
-                const screenCenterX = canvas.width / 2;
-                const screenCenterY = canvas.height / 2;
-                const dx = targetX - screenCenterX;
-                const dy = targetY - screenCenterY;
-
-                localPlayer.targetAngle = Math.atan2(dy, dx);
-
-                // Lerp de Ângulo (Medium Speed Turning)
-                let diff = localPlayer.targetAngle - localPlayer.angle;
-                while (diff < -Math.PI) diff += Math.PI * 2;
-                while (diff > Math.PI) diff -= Math.PI * 2;
-                localPlayer.angle += diff * TURN_SPEED;
-
-                // Verificação de Sprint
-                const wantsSprint = isSpacePressed || isEPressed || (touchSprintId !== null);
-                localPlayer.sprinting = wantsSprint && localPlayer.score >= 6;
-
-                // Velocidade (+50% se sprinting)
-                let speed = 180;
-                if (localPlayer.sprinting) speed *= 1.5;
-
-                // Movimento
-                localPlayer.x += Math.cos(localPlayer.angle) * speed * dt;
-                localPlayer.y += Math.sin(localPlayer.angle) * speed * dt;
-
-                // Atualiza o rastro
-                localPlayer.trail.unshift({ x: localPlayer.x, y: localPlayer.y });
-                const maxLength = Math.floor(localPlayer.score * 5);
-                if (localPlayer.trail.length > maxLength) {
-                    localPlayer.trail.pop();
-                }
-
-                // Colisão com as Bordas
-                if (localPlayer.x <= 0 || localPlayer.x >= MAP_SIZE || localPlayer.y <= 0 || localPlayer.y >= MAP_SIZE) {
-                    killLocalPlayer(true);
-                }
-
-                // Colisão com Comidas
-                const headRadius = 12 + localPlayer.score * 0.1;
-                for (let i = foods.length - 1; i >= 0; i--) {
-                    let f = foods[i];
-                    let dist = Math.hypot(localPlayer.x - f.x, localPlayer.y - f.y);
-                    if (dist < headRadius + 6) {
-                        localPlayer.score += f.val;
-                        sendRemoteEvent("eat_food", { foodId: f.id });
-                        foods.splice(i, 1);
-                    }
-                }
-
-                // Colisão em corpos de outros jogadores
-                for (let id in remotePlayers) {
-                    let p = remotePlayers[id];
-                    if (p.dead) continue;
-                    for (let seg of p.trail) {
-                        let dist = Math.hypot(localPlayer.x - seg.x, localPlayer.y - seg.y);
-                        if (dist < headRadius) {
-                            killLocalPlayer(false);
-                            break;
-                        }
-                    }
-                }
-
-                // Transmite estado para o servidor
-                sendRemoteEvent("state_update", {
-                    id: myId,
-                    name: localPlayer.name,
-                    color: localPlayer.color,
-                    x: localPlayer.x,
-                    y: localPlayer.y,
-                    angle: localPlayer.angle,
-                    score: localPlayer.score,
-                    sprinting: localPlayer.sprinting,
-                    trail: localPlayer.trail,
-                    dead: localPlayer.dead,
-                    fadeAlpha: localPlayer.fadeAlpha
-                });
-            } else if (localPlayer.dead) {
-                // Animação de Fade-out
-                if (localPlayer.fadeAlpha > 0) {
-                    localPlayer.fadeAlpha -= dt * 2; // 0.5s fade out
-                    if (localPlayer.fadeAlpha < 0) localPlayer.fadeAlpha = 0;
-                }
+            if (touchMoveId !== null) {
+                targetX = touchMovePos.x;
+                targetY = touchMovePos.y;
             }
 
-            // Lerp linear dos outros jogadores
-            for (let id in remotePlayers) {
-                let p = remotePlayers[id];
-                if (p.targetX !== undefined) {
-                    p.x += (p.targetX - p.x) * 0.3;
-                    p.y += (p.targetY - p.y) * 0.3;
-                    p.angle += (p.targetAngle - p.angle) * 0.3;
-                }
-            }
-        }
+            const screenCenterX = canvas.width / 2;
+            const screenCenterY = canvas.height / 2;
+            const dx = targetX - screenCenterX;
+            const dy = targetY - screenCenterY;
 
-        function killLocalPlayer(hitWall) {
-            if (localPlayer.dead) return;
-            localPlayer.dead = true;
+            currentInput.targetAngle = Math.atan2(dy, dx);
+            currentInput.wantSprint = isSpacePressed || isEPressed || (touchSprintId !== null);
 
-            // Se morreu na parede, não envia rastro como comida
-            sendRemoteEvent("player_died", { 
-                id: myId, 
-                hitWall: hitWall, 
-                trail: hitWall ? [] : localPlayer.trail 
-            });
+            sendRemoteEvent("client_input", currentInput);
+        }, 33);
 
-            // POV preso por 2 segundos
-            setTimeout(() => {
-                isAlive = false;
-                sendRemoteEvent("leave_room", { id: myId });
-                menuUI.style.display = "flex";
-            }, 2000);
-        }
-
-        // --- Renderização ---
+        // --- Loop Principal de Renderização ---
         function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            const camX = localPlayer.x - canvas.width / 2;
-            const camY = localPlayer.y - canvas.height / 2;
+            const camX = cameraTarget.x - canvas.width / 2;
+            const camY = cameraTarget.y - canvas.height / 2;
 
             ctx.save();
             ctx.translate(-camX, -camY);
 
-            // Fundo
+            // Mapa Preto e Grade Cinza
             ctx.fillStyle = "#000000";
             ctx.fillRect(0, 0, MAP_SIZE, MAP_SIZE);
 
-            // Grade Cinza
             ctx.strokeStyle = "#222222";
             ctx.lineWidth = 1;
             for (let x = 0; x <= MAP_SIZE; x += GRID_SIZE) {
-                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MAP_SIZE); ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, MAP_SIZE);
+                ctx.stroke();
             }
             for (let y = 0; y <= MAP_SIZE; y += GRID_SIZE) {
-                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(MAP_SIZE, y); ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(MAP_SIZE, y);
+                ctx.stroke();
             }
 
             // Borda Vermelha Quadrada
@@ -559,28 +434,25 @@
             ctx.lineWidth = 8;
             ctx.strokeRect(0, 0, MAP_SIZE, MAP_SIZE);
 
-            // Comidas
-            for (let f of foods) {
+            // Renderizar Comidas do Servidor
+            for (let f of foodsState) {
                 ctx.fillStyle = f.color;
                 ctx.beginPath();
-                ctx.arc(f.x, f.y, 4 + (f.val || 1), 0, Math.PI * 2);
+                ctx.arc(f.x, f.y, 4 + f.val, 0, Math.PI * 2);
                 ctx.fill();
             }
 
-            // Jogadores Remotos
-            for (let id in remotePlayers) {
-                drawSnake(remotePlayers[id]);
-            }
-
-            // Jogador Local
-            if (isAlive || localPlayer.dead) {
-                drawSnake(localPlayer);
+            // Renderizar Cobras do Servidor
+            for (let id in snakesState) {
+                drawSnake(snakesState[id]);
             }
 
             ctx.restore();
 
             // Minimapa
             renderMinimap();
+
+            requestAnimationFrame(render);
         }
 
         function drawSnake(p) {
@@ -588,7 +460,9 @@
             if (p.dead && p.fadeAlpha <= 0) return;
 
             ctx.save();
-            if (p.dead) ctx.globalAlpha = p.fadeAlpha || 0.5;
+            if (p.dead) {
+                ctx.globalAlpha = p.fadeAlpha || 0.5;
+            }
 
             const size = 10 + p.score * 0.1;
 
@@ -601,7 +475,7 @@
                 ctx.fill();
             }
 
-            // Cabeça e Olhos
+            // Cabeça e Olhos direcionais
             const head = p.trail[0] || { x: p.x, y: p.y };
             ctx.save();
             ctx.translate(head.x, head.y);
@@ -642,15 +516,8 @@
             mctx.clearRect(0, 0, 150, 150);
             const scale = 150 / MAP_SIZE;
 
-            if (isAlive && !localPlayer.dead) {
-                mctx.fillStyle = localPlayer.color;
-                mctx.beginPath();
-                mctx.arc(localPlayer.x * scale, localPlayer.y * scale, 3, 0, Math.PI * 2);
-                mctx.fill();
-            }
-
-            for (let id in remotePlayers) {
-                let p = remotePlayers[id];
+            for (let id in snakesState) {
+                let p = snakesState[id];
                 if (!p.dead) {
                     mctx.fillStyle = p.color;
                     mctx.beginPath();
@@ -660,7 +527,7 @@
             }
         }
 
-        requestAnimationFrame(gameLoop);
+        requestAnimationFrame(render);
     </script>
 </body>
 </html>
