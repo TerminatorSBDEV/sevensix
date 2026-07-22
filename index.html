@@ -1,53 +1,152 @@
-<!-- WebSocket Tic-Tac-Toe Client -->
 <!DOCTYPE html>
 <html>
 <head>
-    <title>WebSocket Tic-Tac-Toe</title>
+    <title>Server Replication Test</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        body { background:#09090b; color:#fff; font-family:sans-serif; text-align:center; }
-        .grid { display:grid; grid-template-columns:repeat(3,90px); gap:8px; justify-content:center; margin-top:20px; }
-        .cell { width:90px; height:90px; background:#1e293b; display:flex; align-items:center; justify-content:center; font-size:2rem; cursor:pointer; border-radius:8px; font-weight:bold; }
+        body { 
+            background: #09090b; 
+            color: #fff; 
+            font-family: sans-serif; 
+            text-align: center; 
+            margin: 0; 
+            overflow: hidden; 
+            touch-action: none; 
+        }
+        #status { 
+            padding: 10px; 
+            font-size: 1rem; 
+            background: #18181b; 
+        }
+        #canvas-container { 
+            position: relative; 
+            width: 100vw; 
+            height: calc(100vh - 45px); 
+            background: #121214; 
+            cursor: crosshair; 
+        }
+        canvas { 
+            display: block; 
+            width: 100%; 
+            height: 100%; 
+        }
     </style>
 </head>
 <body>
-    <h2>WebSocket Tic-Tac-Toe</h2>
-    <div id="status">Connecting...</div>
-    <div class="grid">
-        <div class="cell" onclick="play(0)"></div><div class="cell" onclick="play(1)"></div><div class="cell" onclick="play(2)"></div>
-        <div class="cell" onclick="play(3)"></div><div class="cell" onclick="play(4)"></div><div class="cell" onclick="play(5)"></div>
-        <div class="cell" onclick="play(6)"></div><div class="cell" onclick="play(7)"></div><div class="cell" onclick="play(8)"></div>
+    <div id="status">Connecting to EzBridge...</div>
+    <div id="canvas-container">
+        <canvas id="testCanvas"></canvas>
     </div>
+
     <script>
         const key = "146cf8ce56";
         const link = "https://chest-manhattan-oval-affecting.trycloudflare.com";
         const socket = io(link, { auth: { token: "default_key" } });
-        let mySymbol = "";
+
+        const canvas = document.getElementById("testCanvas");
+        const ctx = canvas.getContext("2d");
+        const statusEl = document.getElementById("status");
+
+        let isDragging = false;
+        let mouseX = 0;
+        let mouseY = 0;
+        let serverX = 0;
+        let serverY = 0;
+
+        function resizeCanvas() {
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
 
         socket.on("connect", () => {
             socket.emit("join_virtual_server", { key });
         });
 
         socket.on("joined_successfully", () => {
-            document.getElementById("status").innerText = "Waiting for game start...";
-            socket.emit("RemoteEvent", { type: "join_game" });
+            statusEl.innerText = "Connected! Drag anywhere to test latency.";
         });
 
         socket.on("RemoteEvent", (pkt) => {
-            if (pkt.type === "board_update") {
-                const cells = document.querySelectorAll(".cell");
-                pkt.data.board.forEach((val, i) => cells[i].innerText = val || "");
-                if (pkt.data.winner) {
-                    document.getElementById("status").innerText = "Winner: " + pkt.data.winner;
-                } else {
-                    document.getElementById("status").innerText = "Turn: " + pkt.data.currentTurn;
-                }
+            if (pkt.type === "position_replicate") {
+                serverX = pkt.data.x;
+                serverY = pkt.data.y;
             }
         });
 
-        function play(idx) {
-            socket.emit("RemoteEvent", { type: "make_move", data: { idx } });
+        function getEventPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            let clientX, clientY;
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
         }
+
+        function startDrag(e) {
+            isDragging = true;
+            const pos = getEventPos(e);
+            mouseX = pos.x;
+            mouseY = pos.y;
+        }
+
+        function moveDrag(e) {
+            if (!isDragging) return;
+            const pos = getEventPos(e);
+            mouseX = pos.x;
+            mouseY = pos.y;
+
+            socket.emit("RemoteEvent", {
+                type: "update_position",
+                data: { x: mouseX, y: mouseY }
+            });
+        }
+
+        function endDrag() {
+            if (!isDragging) return;
+            isDragging = false;
+            socket.emit("RemoteEvent", {
+                type: "update_position",
+                data: { x: -1000, y: -1000 }
+            });
+        }
+
+        canvas.addEventListener('mousedown', startDrag);
+        canvas.addEventListener('mousemove', moveDrag);
+        window.addEventListener('mouseup', endDrag);
+
+        canvas.addEventListener('touchstart', (e) => { startDrag(e); e.preventDefault(); });
+        canvas.addEventListener('touchmove', (e) => { moveDrag(e); e.preventDefault(); });
+        window.addEventListener('touchend', (e) => { endDrag(); e.preventDefault(); });
+
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (isDragging) {
+                ctx.beginPath();
+                ctx.arc(mouseX, mouseY, 30, 0, Math.PI * 2);
+                ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+                ctx.fill();
+            }
+
+            if (serverX > -500 && serverY > -500) {
+                ctx.beginPath();
+                ctx.arc(serverX, serverY, 30, 0, Math.PI * 2);
+                ctx.fillStyle = "yellow";
+                ctx.fill();
+            }
+
+            requestAnimationFrame(render);
+        }
+        render();
     </script>
 </body>
 </html>
