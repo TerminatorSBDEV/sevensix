@@ -204,11 +204,10 @@
         const spawnBtn = document.getElementById('spawnBtn');
 
         let myId = Math.random().toString(36).substring(2, 9);
-        let currentRoom = null;
         let isAlive = false;
         let socket = null;
 
-        // Local state
+        // Estado do Jogador Local
         let localPlayer = {
             id: myId,
             name: '',
@@ -226,9 +225,8 @@
 
         let remotePlayers = {};
         let foods = [];
-        let availableRooms = {};
 
-        // Mobile Controls Data
+        // Controles de Toque / Teclas
         let touchMoveId = null;
         let touchMovePos = { x: 0, y: 0 };
         let touchSprintId = null;
@@ -268,39 +266,21 @@
         });
 
         socket.on("joined_successfully", () => {
-            statusText.innerText = "Online. Pronto para jogar.";
-            fetchServerRooms();
+            statusText.innerText = "Online";
         });
 
         socket.on("join_error", (err) => {
-            statusText.innerText = "Erro: " + err.error;
+            statusText.innerText = "Erro ao entrar: " + err.error;
         });
 
-        function sendPacket(type, payloadData = {}) {
-            socket.emit("RemoteEvent", {
-                type: type,
-                room: currentRoom,
-                sender: myId,
-                data: payloadData
-            });
-        }
-
-        function fetchServerRooms() {
-            socket.emit("RemoteEvent", { type: "ping_rooms", sender: myId });
+        function sendRemoteEvent(type, data) {
+            socket.emit("RemoteEvent", { type, data, sender: myId });
         }
 
         socket.on("RemoteEvent", (packet) => {
             if (!packet || !packet.type) return;
 
-            // Retorno das salas ativas no servidor
-            if (packet.type === "room_list_response" && packet.sender === myId) {
-                availableRooms = packet.rooms || {};
-                joinAvailableRoomOrCreate();
-            }
-
-            if (packet.room !== currentRoom) return;
-
-            // Atualização de Jogadores Remotos
+            // Atualização de Estado dos Jogadores
             if (packet.type === "state_update") {
                 const data = packet.data;
                 if (!data || data.id === myId) return;
@@ -322,14 +302,12 @@
                 }
             }
 
-            // Sincronização de Comidas pelo Servidor
+            // Sincronização de Alimentos
             if (packet.type === "food_sync") {
-                if (Array.isArray(packet.data)) {
-                    foods = packet.data;
-                }
+                foods = packet.data || [];
             }
 
-            // Saída de Jogadores
+            // Desconexão/Saída de Jogador
             if (packet.type === "leave_room") {
                 if (packet.data && packet.data.id) {
                     delete remotePlayers[packet.data.id];
@@ -337,28 +315,7 @@
             }
         });
 
-        // --- Matchmaking ---
-        function matchmakeAndSpawn() {
-            spawnBtn.disabled = true;
-            statusText.innerText = "Buscando servidor...";
-            fetchServerRooms();
-        }
-
-        function joinAvailableRoomOrCreate() {
-            let selectedRoom = null;
-
-            for (let rId in availableRooms) {
-                if (availableRooms[rId] < 20) {
-                    selectedRoom = rId;
-                    break;
-                }
-            }
-
-            if (!selectedRoom) {
-                selectedRoom = "room_" + Math.random().toString(36).substring(2, 9);
-            }
-
-            currentRoom = selectedRoom;
+        function spawnPlayer() {
             localPlayer.name = nameInput.value.trim() || "Snake";
             localPlayer.x = Math.random() * (MAP_SIZE - 400) + 200;
             localPlayer.y = Math.random() * (MAP_SIZE - 400) + 200;
@@ -366,17 +323,17 @@
             localPlayer.trail = [];
             localPlayer.dead = false;
             localPlayer.fadeAlpha = 1.0;
-            remotePlayers = {};
             isAlive = true;
 
             menuUI.style.display = "none";
-            spawnBtn.disabled = false;
-            statusText.innerText = `Servidor: ${currentRoom}`;
+            
+            // Notifica o ServerScript da entrada
+            sendRemoteEvent("player_join", { id: myId, name: localPlayer.name });
         }
 
-        spawnBtn.addEventListener('click', matchmakeAndSpawn);
+        spawnBtn.addEventListener('click', spawnPlayer);
 
-        // --- Controls ---
+        // --- Controles de Teclado e Celular ---
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Space') isSpacePressed = true;
             if (e.key.toLowerCase() === 'e') isEPressed = true;
@@ -393,7 +350,7 @@
             mousePos.y = e.clientY;
         });
 
-        // Touch Controls
+        // Controles de Toque para Celular
         window.addEventListener('touchstart', (e) => {
             for (let i = 0; i < e.changedTouches.length; i++) {
                 let t = e.changedTouches[i];
@@ -423,25 +380,19 @@
             }
         });
 
-        // Sprint Timer (Consome 1 comida a cada 0.3s)
+        // Loop de Sprint (consome 1 de vida a cada 0.3s)
         setInterval(() => {
             if (isAlive && localPlayer.sprinting && localPlayer.score >= 6) {
                 localPlayer.score -= 1;
+                // Notifica o ServerScript para largar comida
                 if (localPlayer.trail.length > 0) {
                     const tail = localPlayer.trail[localPlayer.trail.length - 1];
-                    foods.push({
-                        id: Math.random().toString(36).substring(2, 7),
-                        x: tail.x,
-                        y: tail.y,
-                        val: 1,
-                        color: `hsl(${Math.floor(Math.random() * 360)}, 100%, 50%)`
-                    });
-                    sendPacket("food_sync", foods);
+                    sendRemoteEvent("drop_food", { x: tail.x, y: tail.y, val: 1 });
                 }
             }
         }, 300);
 
-        // --- Game Loop ---
+        // --- Loop Principal de Física e Renderização ---
         let lastTime = performance.now();
 
         function gameLoop(now) {
@@ -456,6 +407,7 @@
 
         function update(dt) {
             if (isAlive && !localPlayer.dead) {
+                // Cálculo de Direção
                 let targetX = mousePos.x;
                 let targetY = mousePos.y;
 
@@ -471,16 +423,17 @@
 
                 localPlayer.targetAngle = Math.atan2(dy, dx);
 
-                // Medium Speed Turning
+                // Lerp de Ângulo (Medium Speed Turning)
                 let diff = localPlayer.targetAngle - localPlayer.angle;
                 while (diff < -Math.PI) diff += Math.PI * 2;
                 while (diff > Math.PI) diff -= Math.PI * 2;
                 localPlayer.angle += diff * TURN_SPEED;
 
-                // Checagem de Sprint
+                // Verificação de Sprint
                 const wantsSprint = isSpacePressed || isEPressed || (touchSprintId !== null);
                 localPlayer.sprinting = wantsSprint && localPlayer.score >= 6;
 
+                // Velocidade (+50% se sprinting)
                 let speed = 180;
                 if (localPlayer.sprinting) speed *= 1.5;
 
@@ -488,34 +441,34 @@
                 localPlayer.x += Math.cos(localPlayer.angle) * speed * dt;
                 localPlayer.y += Math.sin(localPlayer.angle) * speed * dt;
 
-                // Rastro do corpo
+                // Atualiza o rastro
                 localPlayer.trail.unshift({ x: localPlayer.x, y: localPlayer.y });
                 const maxLength = Math.floor(localPlayer.score * 5);
                 if (localPlayer.trail.length > maxLength) {
                     localPlayer.trail.pop();
                 }
 
-                // Colisão com Bordas
+                // Colisão com as Bordas
                 if (localPlayer.x <= 0 || localPlayer.x >= MAP_SIZE || localPlayer.y <= 0 || localPlayer.y >= MAP_SIZE) {
                     killLocalPlayer(true);
                 }
 
-                // Colisão com Alimentos
+                // Colisão com Comidas
                 const headRadius = 12 + localPlayer.score * 0.1;
                 for (let i = foods.length - 1; i >= 0; i--) {
                     let f = foods[i];
                     let dist = Math.hypot(localPlayer.x - f.x, localPlayer.y - f.y);
                     if (dist < headRadius + 6) {
                         localPlayer.score += f.val;
+                        sendRemoteEvent("eat_food", { foodId: f.id });
                         foods.splice(i, 1);
-                        sendPacket("food_sync", foods);
                     }
                 }
 
-                // Colisão com outras cobras
+                // Colisão em corpos de outros jogadores
                 for (let id in remotePlayers) {
                     let p = remotePlayers[id];
-                    if (p.dead || !p.trail) continue;
+                    if (p.dead) continue;
                     for (let seg of p.trail) {
                         let dist = Math.hypot(localPlayer.x - seg.x, localPlayer.y - seg.y);
                         if (dist < headRadius) {
@@ -525,8 +478,8 @@
                     }
                 }
 
-                // Transmissão do Estado para o Servidor
-                sendPacket("state_update", {
+                // Transmite estado para o servidor
+                sendRemoteEvent("state_update", {
                     id: myId,
                     name: localPlayer.name,
                     color: localPlayer.color,
@@ -540,13 +493,14 @@
                     fadeAlpha: localPlayer.fadeAlpha
                 });
             } else if (localPlayer.dead) {
+                // Animação de Fade-out
                 if (localPlayer.fadeAlpha > 0) {
-                    localPlayer.fadeAlpha -= dt * 2; // 0.5s
+                    localPlayer.fadeAlpha -= dt * 2; // 0.5s fade out
                     if (localPlayer.fadeAlpha < 0) localPlayer.fadeAlpha = 0;
                 }
             }
 
-            // Lerp para Interpolação Online dos Outros Jogadores
+            // Lerp linear dos outros jogadores
             for (let id in remotePlayers) {
                 let p = remotePlayers[id];
                 if (p.targetX !== undefined) {
@@ -561,39 +515,18 @@
             if (localPlayer.dead) return;
             localPlayer.dead = true;
 
-            if (!hitWall) {
-                for (let i = 0; i < localPlayer.trail.length; i += 3) {
-                    let seg = localPlayer.trail[i];
-                    foods.push({
-                        id: Math.random().toString(36).substring(2, 7),
-                        x: seg.x + (Math.random() * 10 - 5),
-                        y: seg.y + (Math.random() * 10 - 5),
-                        val: 1,
-                        color: `hsl(${Math.floor(Math.random() * 360)}, 100%, 50%)`
-                    });
-                }
-                sendPacket("food_sync", foods);
-            }
-
-            sendPacket("state_update", {
-                id: myId,
-                name: localPlayer.name,
-                color: localPlayer.color,
-                x: localPlayer.x,
-                y: localPlayer.y,
-                angle: localPlayer.angle,
-                score: localPlayer.score,
-                trail: localPlayer.trail,
-                dead: true,
-                fadeAlpha: 1.0
+            // Se morreu na parede, não envia rastro como comida
+            sendRemoteEvent("player_died", { 
+                id: myId, 
+                hitWall: hitWall, 
+                trail: hitWall ? [] : localPlayer.trail 
             });
 
+            // POV preso por 2 segundos
             setTimeout(() => {
                 isAlive = false;
-                sendPacket("leave_room", { id: myId });
-                currentRoom = null;
+                sendRemoteEvent("leave_room", { id: myId });
                 menuUI.style.display = "flex";
-                statusText.innerText = "Online. Pronto para jogar.";
             }, 2000);
         }
 
@@ -615,16 +548,10 @@
             ctx.strokeStyle = "#222222";
             ctx.lineWidth = 1;
             for (let x = 0; x <= MAP_SIZE; x += GRID_SIZE) {
-                ctx.beginPath();
-                ctx.moveTo(x, 0);
-                ctx.lineTo(x, MAP_SIZE);
-                ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MAP_SIZE); ctx.stroke();
             }
             for (let y = 0; y <= MAP_SIZE; y += GRID_SIZE) {
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(MAP_SIZE, y);
-                ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(MAP_SIZE, y); ctx.stroke();
             }
 
             // Borda Vermelha Quadrada
@@ -632,9 +559,9 @@
             ctx.lineWidth = 8;
             ctx.strokeRect(0, 0, MAP_SIZE, MAP_SIZE);
 
-            // Alimentos
+            // Comidas
             for (let f of foods) {
-                ctx.fillStyle = f.color || "#00ff88";
+                ctx.fillStyle = f.color;
                 ctx.beginPath();
                 ctx.arc(f.x, f.y, 4 + (f.val || 1), 0, Math.PI * 2);
                 ctx.fill();
@@ -652,6 +579,7 @@
 
             ctx.restore();
 
+            // Minimapa
             renderMinimap();
         }
 
@@ -660,9 +588,7 @@
             if (p.dead && p.fadeAlpha <= 0) return;
 
             ctx.save();
-            if (p.dead) {
-                ctx.globalAlpha = p.fadeAlpha || 0.5;
-            }
+            if (p.dead) ctx.globalAlpha = p.fadeAlpha || 0.5;
 
             const size = 10 + p.score * 0.1;
 
