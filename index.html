@@ -56,7 +56,6 @@
             font-size: 2rem;
             margin-bottom: 20px;
             color: #fff;
-            letter-spacing: 1px;
         }
         .form-group {
             margin-bottom: 16px;
@@ -132,6 +131,24 @@
             text-shadow: 1px 1px 2px #000;
             pointer-events: none;
         }
+        /* Painel de Logs de Eventos Importantes */
+        #logBox {
+            position: absolute;
+            top: 40px;
+            left: 15px;
+            width: 280px;
+            max-height: 120px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 8px;
+            font-family: monospace;
+            font-size: 0.75rem;
+            color: #00e1ff;
+            overflow-y: auto;
+            z-index: 6;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
@@ -139,6 +156,7 @@
     <canvas id="gameCanvas"></canvas>
     <canvas id="minimap" width="150" height="150"></canvas>
     <div id="statusText">Conectando...</div>
+    <div id="logBox">-- LOGS DO JOGO --</div>
 
     <div id="menuUI">
         <div class="menu-card">
@@ -184,6 +202,7 @@
         const mctx = minimapCanvas.getContext('2d');
         const menuUI = document.getElementById('menuUI');
         const statusText = document.getElementById('statusText');
+        const logBox = document.getElementById('logBox');
 
         const rInput = document.getElementById('rColor');
         const gInput = document.getElementById('gColor');
@@ -212,6 +231,13 @@
         let touchMovePos = { x: 0, y: 0 };
         let touchSprintId = null;
 
+        function addLog(text) {
+            let entry = document.createElement('div');
+            entry.innerText = `[${new Date().toLocaleTimeString().split(' ')[0]}] ${text}`;
+            logBox.appendChild(entry);
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
         function updateColorPreview() {
             const r = parseInt(rInput.value);
             const g = parseInt(gInput.value);
@@ -235,56 +261,71 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
+        // WebSocket
         socket = io(SERVER_LINK, { auth: { token: SERVER_KEY } });
 
         socket.on("connect", () => {
             statusText.innerText = "Conectado. Autenticando...";
+            addLog("Conectado ao WebSocket.");
             socket.emit("join_virtual_server", { key: SERVER_KEY });
         });
 
         socket.on("joined_successfully", () => {
             statusText.innerText = "Online.";
+            addLog("Autenticado no servidor EzBridge.");
         });
 
-        function sendEvent(type, data) {
-            socket.emit("RemoteEvent", { type, data, senderId: myId });
+        function sendPacket(type, data) {
+            socket.emit("RemoteEvent", { type, data, room: currentRoom, sender: myId });
         }
 
         socket.on("RemoteEvent", (packet) => {
             if (!packet.type) return;
 
-            if (packet.type === "room_assigned" && packet.data.targetPlayerId === myId) {
-                currentRoom = packet.data.roomId;
+            // Filtro de logs para não spamar com ticks do jogo
+            if (packet.type === "room_assigned" && packet.data.targetPlayer === myId) {
+                currentRoom = packet.data.room;
                 statusText.innerText = `Sala: ${currentRoom}`;
+                addLog(`Sala atribuída: ${currentRoom}`);
                 
-                sendEvent("join_game", {
-                    roomId: currentRoom,
+                // Entrar na sala
+                sendPacket("join_game", {
+                    room: currentRoom,
                     name: nameInput.value.trim() || "Snake",
                     color: chosenColor
                 });
-                isAlive = true;
+                addLog("Solicitando surgimento (join_game)...");
             }
 
-            if (packet.type === "world_tick" && packet.data.roomId === currentRoom) {
+            if (packet.type === "spawn_confirmed" && packet.data.targetPlayer === myId) {
+                addLog("-> Servidor respondeu: " + packet.data.message);
+                isAlive = true;
+                menuUI.style.display = "none";
+            }
+
+            if (packet.type === "world_tick") {
+                if (packet.data.room !== currentRoom) return;
+
                 serverPlayers = packet.data.players;
                 foods = packet.data.foods;
 
                 if (serverPlayers[myId] && serverPlayers[myId].dead && isAlive) {
                     isAlive = false;
+                    addLog("Você morreu no jogo!");
                     setTimeout(() => {
                         menuUI.style.display = "flex";
                         currentRoom = null;
-                    }, 2000);
+                    }, 1500);
                 }
             }
         });
 
         spawnBtn.addEventListener('click', () => {
-            menuUI.style.display = "none";
-            sendEvent("find_room", {});
+            addLog("Procurando sala...");
+            sendPacket("find_room", {});
         });
 
-        // Eventos de teclado e toque
+        // Controles de Input
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Space') isSpacePressed = true;
             if (e.key.toLowerCase() === 'e') isEPressed = true;
@@ -316,9 +357,7 @@
         window.addEventListener('touchmove', (e) => {
             for (let i = 0; i < e.changedTouches.length; i++) {
                 let t = e.changedTouches[i];
-                if (t.identifier === touchMoveId) {
-                    touchMovePos = { x: t.clientX, y: t.clientY };
-                }
+                if (t.identifier === touchMoveId) touchMovePos = { x: t.clientX, y: t.clientY };
             }
         });
 
@@ -347,15 +386,15 @@
 
                 let wantsSprint = isSpacePressed || isEPressed || (touchSprintId !== null);
 
-                sendEvent("player_input", {
-                    roomId: currentRoom,
+                sendPacket("player_input", {
+                    room: currentRoom,
                     targetAngle: targetAngle,
                     wantsSprint: wantsSprint
                 });
             }
         }, 50);
 
-        // Render e Interpolação (LERP)
+        // Loop de Renderização
         function gameLoop() {
             for (let id in serverPlayers) {
                 let sp = serverPlayers[id];
