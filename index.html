@@ -51,6 +51,7 @@
             width: 320px;
             box-shadow: 0 8px 24px rgba(0,0,0,0.8);
             text-align: center;
+            position: relative;
         }
         .menu-card h1 {
             font-size: 2rem;
@@ -115,17 +116,12 @@
         button.btn-spawn:hover {
             background: #218838;
         }
-        #minimap {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            width: 150px;
-            height: 150px;
-            background: rgba(0, 0, 0, 0.6);
-            border: 2px solid #555;
-            border-radius: 8px;
-            z-index: 5;
-            pointer-events: none;
+        #serverTestDisplay {
+            margin-top: 15px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #00e1ff;
+            min-height: 25px;
         }
         #statusText {
             position: absolute;
@@ -143,7 +139,6 @@
 <body>
 
     <canvas id="gameCanvas"></canvas>
-    <canvas id="minimap" width="150" height="150"></canvas>
     <div id="statusText">Conectando...</div>
 
     <div id="menuUI">
@@ -175,21 +170,19 @@
                 <div class="color-preview" id="colorPreview"></div>
             </div>
             <button class="btn-spawn" id="spawnBtn">Surgir</button>
+
+            <!-- MOSTRADOR DO NÚMERO DE TESTE DO SERVIDOR -->
+            <div id="serverTestDisplay">Pressione 'E' para testar ServerScript</div>
         </div>
     </div>
 
     <script>
         const SERVER_KEY = "146cf8ce56";
         const SERVER_LINK = "https://chest-manhattan-oval-affecting.trycloudflare.com";
-        const MAP_SIZE = 4000;
-        const GRID_SIZE = 100;
 
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const minimapCanvas = document.getElementById('minimap');
-        const mctx = minimapCanvas.getContext('2d');
         const menuUI = document.getElementById('menuUI');
         const statusText = document.getElementById('statusText');
+        const testDisplay = document.getElementById('serverTestDisplay');
 
         const rInput = document.getElementById('rColor');
         const gInput = document.getElementById('gColor');
@@ -198,27 +191,9 @@
         const gVal = document.getElementById('gVal');
         const bVal = document.getElementById('bVal');
         const colorPreview = document.getElementById('colorPreview');
-        const nameInput = document.getElementById('pName');
-        const spawnBtn = document.getElementById('spawnBtn');
 
-        let myId = Math.random().toString(36).substring(2, 9);
-        let currentRoom = null;
-        let isAlive = false;
         let socket = null;
-        let chosenColor = '#808080';
-
-        // Estado do mundo recebido do servidor e renderizado com LERP
-        let serverPlayers = {};
-        let renderPlayers = {};
-        let foods = [];
-
-        // Input
-        let targetAngle = 0;
-        let isSpacePressed = false;
-        let isEPressed = false;
-        let touchMoveId = null;
-        let touchMovePos = { x: 0, y: 0 };
-        let touchSprintId = null;
+        let testTimeout = null;
 
         function updateColorPreview() {
             const r = parseInt(rInput.value);
@@ -227,21 +202,13 @@
             rVal.innerText = Math.round((r / 255) * 100) + '%';
             gVal.innerText = Math.round((g / 255) * 100) + '%';
             bVal.innerText = Math.round((b / 255) * 100) + '%';
-            chosenColor = `rgb(${r},${g},${b})`;
-            colorPreview.style.backgroundColor = chosenColor;
+            colorPreview.style.backgroundColor = `rgb(${r},${g},${b})`;
         }
 
         rInput.addEventListener('input', updateColorPreview);
         gInput.addEventListener('input', updateColorPreview);
         bInput.addEventListener('input', updateColorPreview);
         updateColorPreview();
-
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        }
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
 
         // WebSocket Setup
         socket = io(SERVER_LINK, { auth: { token: SERVER_KEY } });
@@ -252,267 +219,33 @@
         });
 
         socket.on("joined_successfully", () => {
-            statusText.innerText = "Online. Pronto para jogar.";
+            statusText.innerText = "Online. Pressione E no menu para testar.";
         });
 
-        socket.on("join_error", (err) => {
-            statusText.innerText = "Erro ao conectar: " + err.error;
-        });
-
-        function sendPacket(type, data) {
-            socket.emit("RemoteEvent", { type, data, room: currentRoom, sender: myId });
-        }
-
+        // Escutando eventos do servidor EzBridge
         socket.on("RemoteEvent", (packet) => {
-            if (!packet.type) return;
-
-            if (packet.type === "room_assigned" && packet.sender === myId) {
-                currentRoom = packet.room;
-                statusText.innerText = `Servidor: ${currentRoom}`;
+            if (packet.type === "random_number_response") {
+                testDisplay.innerText = "Número do Servidor: " + packet.data.number;
                 
-                // Entra na sala no servidor autoritativo
-                sendPacket("join_game", {
-                    id: myId,
-                    name: nameInput.value.trim() || "Snake",
-                    color: chosenColor
-                });
-                isAlive = true;
-            }
-
-            if (packet.room !== currentRoom) return;
-
-            // Recebimento do Tick do Mundo enviado pelo servidor
-            if (packet.type === "world_tick") {
-                serverPlayers = packet.data.players;
-                foods = packet.data.foods;
-
-                // Checar se morreu no servidor
-                if (serverPlayers[myId] && serverPlayers[myId].dead && isAlive) {
-                    isAlive = false;
-                    setTimeout(() => {
-                        menuUI.style.display = "flex";
-                        currentRoom = null;
-                    }, 2000); // POV preso 2s antes do menu
-                }
+                if (testTimeout) clearTimeout(testTimeout);
+                testTimeout = setTimeout(() => {
+                    testDisplay.innerText = "Pressione 'E' para testar ServerScript";
+                }, 3000);
             }
         });
 
-        spawnBtn.addEventListener('click', () => {
-            menuUI.style.display = "none";
-            sendPacket("find_room", {});
-        });
-
-        // Controles de Input
+        // Captura da tecla E no menu
         window.addEventListener('keydown', (e) => {
-            if (e.code === 'Space') isSpacePressed = true;
-            if (e.key.toLowerCase() === 'e') isEPressed = true;
-        });
-
-        window.addEventListener('keyup', (e) => {
-            if (e.code === 'Space') isSpacePressed = false;
-            if (e.key.toLowerCase() === 'e') isEPressed = false;
-        });
-
-        let mousePos = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
-        window.addEventListener('mousemove', (e) => {
-            mousePos.x = e.clientX;
-            mousePos.y = e.clientY;
-        });
-
-        window.addEventListener('touchstart', (e) => {
-            for (let i = 0; i < e.changedTouches.length; i++) {
-                let t = e.changedTouches[i];
-                if (touchMoveId === null) {
-                    touchMoveId = t.identifier;
-                    touchMovePos = { x: t.clientX, y: t.clientY };
-                } else if (touchSprintId === null) {
-                    touchSprintId = t.identifier;
+            if (e.key.toLowerCase() === 'e') {
+                if (menuUI.style.display !== "none") {
+                    testDisplay.innerText = "Solicitando ao servidor...";
+                    socket.emit("RemoteEvent", {
+                        type: "request_random_number",
+                        data: {}
+                    });
                 }
             }
         });
-
-        window.addEventListener('touchmove', (e) => {
-            for (let i = 0; i < e.changedTouches.length; i++) {
-                let t = e.changedTouches[i];
-                if (t.identifier === touchMoveId) {
-                    touchMovePos = { x: t.clientX, y: t.clientY };
-                }
-            }
-        });
-
-        window.addEventListener('touchend', (e) => {
-            for (let i = 0; i < e.changedTouches.length; i++) {
-                let t = e.changedTouches[i];
-                if (t.identifier === touchMoveId) touchMoveId = null;
-                if (t.identifier === touchSprintId) touchSprintId = null;
-            }
-        });
-
-        // Envio constante de Inputs para o servidor (20Hz)
-        setInterval(() => {
-            if (currentRoom && isAlive) {
-                let targetX = mousePos.x;
-                let targetY = mousePos.y;
-
-                if (touchMoveId !== null) {
-                    targetX = touchMovePos.x;
-                    targetY = touchMovePos.y;
-                }
-
-                let dx = targetX - (canvas.width / 2);
-                let dy = targetY - (canvas.height / 2);
-                targetAngle = Math.atan2(dy, dx);
-
-                let wantsSprint = isSpacePressed || isEPressed || (touchSprintId !== null);
-
-                sendPacket("player_input", {
-                    targetAngle: targetAngle,
-                    wantsSprint: wantsSprint
-                });
-            }
-        }, 50);
-
-        // Loop de Renderização e Interpolação (LERP) no Cliente
-        function gameLoop() {
-            // Atualiza interpolação local das posições vindas do servidor
-            for (let id in serverPlayers) {
-                let sp = serverPlayers[id];
-                if (!renderPlayers[id]) {
-                    renderPlayers[id] = JSON.parse(JSON.stringify(sp));
-                } else {
-                    let rp = renderPlayers[id];
-                    rp.x += (sp.x - rp.x) * 0.3; // LERP
-                    rp.y += (sp.y - rp.y) * 0.3;
-                    rp.angle += (sp.angle - rp.angle) * 0.3;
-                    rp.score = sp.score;
-                    rp.trail = sp.trail;
-                    rp.dead = sp.dead;
-                    rp.fadeAlpha = sp.fadeAlpha;
-                }
-            }
-
-            // Remove desconectados
-            for (let id in renderPlayers) {
-                if (!serverPlayers[id]) delete renderPlayers[id];
-            }
-
-            render();
-            requestAnimationFrame(gameLoop);
-        }
-
-        function render() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Câmera presa na cobra do jogador local
-            let myP = renderPlayers[myId] || { x: MAP_SIZE / 2, y: MAP_SIZE / 2 };
-            const camX = myP.x - canvas.width / 2;
-            const camY = myP.y - canvas.height / 2;
-
-            ctx.save();
-            ctx.translate(-camX, -camY);
-
-            // Fundo e Grade
-            ctx.fillStyle = "#000000";
-            ctx.fillRect(0, 0, MAP_SIZE, MAP_SIZE);
-
-            ctx.strokeStyle = "#222222";
-            ctx.lineWidth = 1;
-            for (let x = 0; x <= MAP_SIZE; x += GRID_SIZE) {
-                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MAP_SIZE); ctx.stroke();
-            }
-            for (let y = 0; y <= MAP_SIZE; y += GRID_SIZE) {
-                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(MAP_SIZE, y); ctx.stroke();
-            }
-
-            // Borda Vermelha Quadrada
-            ctx.strokeStyle = "#ff0000";
-            ctx.lineWidth = 8;
-            ctx.strokeRect(0, 0, MAP_SIZE, MAP_SIZE);
-
-            // Desenhar Comidas
-            for (let f of foods) {
-                ctx.fillStyle = f.color;
-                ctx.beginPath();
-                ctx.arc(f.x, f.y, 4 + f.val, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            // Desenhar Todas as Cobras
-            for (let id in renderPlayers) {
-                drawSnake(renderPlayers[id]);
-            }
-
-            ctx.restore();
-
-            // Minimapa
-            renderMinimap();
-        }
-
-        function drawSnake(p) {
-            if (!p.trail || p.trail.length === 0) return;
-            if (p.dead && p.fadeAlpha <= 0) return;
-
-            ctx.save();
-            if (p.dead) {
-                ctx.globalAlpha = p.fadeAlpha || 0.5;
-            }
-
-            const size = 10 + p.score * 0.1;
-
-            // Desenhar Corpo
-            ctx.fillStyle = p.color;
-            for (let i = p.trail.length - 1; i >= 0; i--) {
-                let seg = p.trail[i];
-                ctx.beginPath();
-                ctx.arc(seg.x, seg.y, size, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            // Desenhar Cabeça e Olhos
-            const head = p.trail[0] || { x: p.x, y: p.y };
-            ctx.save();
-            ctx.translate(head.x, head.y);
-            ctx.rotate(p.angle);
-
-            // Olho Esquerdo
-            ctx.fillStyle = "#fff";
-            ctx.beginPath(); ctx.arc(size * 0.5, -size * 0.5, size * 0.35, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = "#000";
-            ctx.beginPath(); ctx.arc(size * 0.65, -size * 0.5, size * 0.18, 0, Math.PI * 2); ctx.fill();
-
-            // Olho Direito
-            ctx.fillStyle = "#fff";
-            ctx.beginPath(); ctx.arc(size * 0.5, size * 0.5, size * 0.35, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = "#000";
-            ctx.beginPath(); ctx.arc(size * 0.65, size * 0.5, size * 0.18, 0, Math.PI * 2); ctx.fill();
-
-            ctx.restore();
-
-            // Nome
-            ctx.fillStyle = "#ffffff";
-            ctx.font = "12px sans-serif";
-            ctx.textAlign = "center";
-            ctx.fillText(p.name || "", head.x, head.y - size - 8);
-
-            ctx.restore();
-        }
-
-        function renderMinimap() {
-            mctx.clearRect(0, 0, 150, 150);
-            const scale = 150 / MAP_SIZE;
-
-            for (let id in renderPlayers) {
-                let p = renderPlayers[id];
-                if (!p.dead) {
-                    mctx.fillStyle = p.color;
-                    mctx.beginPath();
-                    mctx.arc(p.x * scale, p.y * scale, 3, 0, Math.PI * 2);
-                    mctx.fill();
-                }
-            }
-        }
-
-        requestAnimationFrame(gameLoop);
     </script>
 </body>
 </html>
