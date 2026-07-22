@@ -6,148 +6,23 @@
     <title>Html snakes</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            user-select: none;
-            -webkit-user-select: none;
-            touch-action: none;
-        }
-        body, html {
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background-color: #000;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: #fff;
-        }
-        #gameCanvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1;
-        }
-        #menuUI {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 10;
-            background: rgba(0, 0, 0, 0.85);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
-        .menu-card {
-            background: #121214;
-            border: 2px solid #333;
-            border-radius: 12px;
-            padding: 24px;
-            width: 320px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.8);
-            text-align: center;
-        }
-        .menu-card h1 {
-            font-size: 2rem;
-            margin-bottom: 20px;
-            color: #fff;
-        }
-        .form-group {
-            margin-bottom: 16px;
-            text-align: left;
-        }
-        .form-group label {
-            display: block;
-            font-size: 0.85rem;
-            color: #aaa;
-            margin-bottom: 6px;
-        }
-        .form-group input[type="text"] {
-            width: 100%;
-            padding: 10px;
-            background: #1e1e24;
-            border: 1px solid #444;
-            border-radius: 6px;
-            color: #fff;
-            font-size: 1rem;
-            outline: none;
-        }
-        .color-sliders {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .color-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 0.8rem;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; touch-action: none; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background-color: #000; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #fff; }
+        #gameCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        #menuUI { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; background: rgba(0, 0, 0, 0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .menu-card { background: #121214; border: 2px solid #333; border-radius: 12px; padding: 24px; width: 320px; box-shadow: 0 8px 24px rgba(0,0,0,0.8); text-align: center; }
+        .menu-card h1 { font-size: 2rem; margin-bottom: 20px; color: #fff; }
+        .form-group { margin-bottom: 16px; text-align: left; }
+        .form-group label { display: block; font-size: 0.85rem; color: #aaa; margin-bottom: 6px; }
+        .form-group input[type="text"] { width: 100%; padding: 10px; background: #1e1e24; border: 1px solid #444; border-radius: 6px; color: #fff; font-size: 1rem; outline: none; }
+        .color-sliders { display: flex; flex-direction: column; gap: 8px; }
+        .color-row { display: flex; align-items: center; gap: 10px; font-size: 0.8rem; }
         .color-row input[type="range"] { flex: 1; }
-        .color-preview {
-            width: 100%;
-            height: 20px;
-            border-radius: 4px;
-            margin-top: 8px;
-            border: 1px solid #555;
-        }
-        button.btn-spawn {
-            width: 100%;
-            padding: 12px;
-            margin-top: 16px;
-            background: #28a745;
-            border: none;
-            border-radius: 6px;
-            color: #fff;
-            font-size: 1.1rem;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        #minimap {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            width: 150px;
-            height: 150px;
-            background: rgba(0, 0, 0, 0.6);
-            border: 2px solid #555;
-            border-radius: 8px;
-            z-index: 5;
-            pointer-events: none;
-        }
-        #statusText {
-            position: absolute;
-            top: 15px;
-            left: 15px;
-            z-index: 5;
-            font-size: 0.9rem;
-            color: #00ff88;
-            font-weight: bold;
-            text-shadow: 1px 1px 2px #000;
-            pointer-events: none;
-        }
-        #logBox {
-            position: absolute;
-            top: 40px;
-            left: 15px;
-            width: 280px;
-            max-height: 120px;
-            background: rgba(0, 0, 0, 0.7);
-            border: 1px solid #444;
-            border-radius: 6px;
-            padding: 8px;
-            font-family: monospace;
-            font-size: 0.75rem;
-            color: #00e1ff;
-            overflow-y: auto;
-            z-index: 6;
-            pointer-events: none;
-        }
+        .color-preview { width: 100%; height: 20px; border-radius: 4px; margin-top: 8px; border: 1px solid #555; }
+        button.btn-spawn { width: 100%; padding: 12px; margin-top: 16px; background: #28a745; border: none; border-radius: 6px; color: #fff; font-size: 1.1rem; font-weight: bold; cursor: pointer; }
+        #minimap { position: absolute; bottom: 20px; right: 20px; width: 150px; height: 150px; background: rgba(0, 0, 0, 0.6); border: 2px solid #555; border-radius: 8px; z-index: 5; pointer-events: none; }
+        #statusText { position: absolute; top: 15px; left: 15px; z-index: 5; font-size: 0.9rem; color: #00ff88; font-weight: bold; text-shadow: 1px 1px 2px #000; pointer-events: none; }
+        #logBox { position: absolute; top: 40px; left: 15px; width: 280px; max-height: 120px; background: rgba(0, 0, 0, 0.7); border: 1px solid #444; border-radius: 6px; padding: 8px; font-family: monospace; font-size: 0.75rem; color: #00e1ff; overflow-y: auto; z-index: 6; pointer-events: none; }
     </style>
 </head>
 <body>
@@ -260,7 +135,7 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
 
-        // WebSocket Setup
+        // Conexão Socket.IO
         socket = io(SERVER_LINK, { auth: { token: SERVER_KEY } });
 
         socket.on("connect", () => {
@@ -274,42 +149,57 @@
             addLog("Autenticado no servidor EzBridge.");
         });
 
-        function sendPacket(type, data) {
-            socket.emit("RemoteEvent", { type, data, room: currentRoom, sender: myId });
+        // Envio nativo de eventos para o EzBridge
+        function sendServerEvent(eventName, data) {
+            socket.emit(eventName, {
+                senderId: myId,
+                data: data
+            });
+            // Fallback para caso o EzBridge roteie via RemoteEvent
+            socket.emit("RemoteEvent", {
+                type: eventName,
+                sender: myId,
+                data: data
+            });
         }
 
-        // Receptor Global do EzBridge
-        socket.on("RemoteEvent", (packet) => {
-            if (!packet || !packet.type) return;
+        // Receptor de respostas
+        function handleIncomingPacket(packet) {
+            if (!packet) return;
 
-            if (packet.type === "room_assigned") {
-                if (packet.data && packet.data.targetPlayer === myId) {
-                    currentRoom = packet.data.room;
+            let type = packet.type || packet.eventName;
+            let data = packet.data || packet;
+
+            if (type === "room_assigned" || packet.targetPlayer) {
+                let target = data.targetPlayer || packet.targetPlayer;
+                if (target === myId) {
+                    currentRoom = data.room || packet.room;
                     statusText.innerText = `Sala: ${currentRoom}`;
                     addLog(`Sala atribuída: ${currentRoom}`);
-                    
-                    sendPacket("join_game", {
+
+                    sendServerEvent("join_game", {
                         room: currentRoom,
                         name: nameInput.value.trim() || "Snake",
                         color: chosenColor
                     });
-                    addLog("Enviando solicitação de entrada...");
+                    addLog("Enviando entrada no jogo...");
                 }
             }
 
-            if (packet.type === "spawn_confirmed") {
-                if (packet.data && packet.data.targetPlayer === myId) {
+            if (type === "spawn_confirmed" || packet.message) {
+                let target = data.targetPlayer || packet.targetPlayer;
+                if (target === myId) {
                     addLog("-> Respawn Confirmado!");
                     isAlive = true;
                     menuUI.style.display = "none";
                 }
             }
 
-            if (packet.type === "world_tick") {
-                if (packet.data.room !== currentRoom) return;
+            if (type === "world_tick") {
+                if (data.room !== currentRoom) return;
 
-                serverPlayers = packet.data.players;
-                foods = packet.data.foods;
+                serverPlayers = data.players || {};
+                foods = data.foods || [];
 
                 if (serverPlayers[myId] && serverPlayers[myId].dead && isAlive) {
                     isAlive = false;
@@ -320,14 +210,19 @@
                     }, 1500);
                 }
             }
-        });
+        }
+
+        socket.on("RemoteEvent", handleIncomingPacket);
+        socket.on("room_assigned", (data) => handleIncomingPacket({ type: "room_assigned", data }));
+        socket.on("spawn_confirmed", (data) => handleIncomingPacket({ type: "spawn_confirmed", data }));
+        socket.on("world_tick", (data) => handleIncomingPacket({ type: "world_tick", data }));
 
         spawnBtn.addEventListener('click', () => {
             addLog("Procurando sala...");
-            sendPacket("find_room", {});
+            sendServerEvent("find_room", {});
         });
 
-        // Controles
+        // Controles de Input
         window.addEventListener('keydown', (e) => {
             if (e.code === 'Space') isSpacePressed = true;
             if (e.key.toLowerCase() === 'e') isEPressed = true;
@@ -371,7 +266,7 @@
             }
         });
 
-        // Loop de Inputs do Cliente (20Hz)
+        // Loop de Inputs
         setInterval(() => {
             if (currentRoom && isAlive) {
                 let targetX = mousePos.x;
@@ -388,7 +283,7 @@
 
                 let wantsSprint = isSpacePressed || isEPressed || (touchSprintId !== null);
 
-                sendPacket("player_input", {
+                sendServerEvent("player_input", {
                     room: currentRoom,
                     targetAngle: targetAngle,
                     wantsSprint: wantsSprint
@@ -396,7 +291,7 @@
             }
         }, 50);
 
-        // Renderização
+        // Loop de Renderização
         function gameLoop() {
             for (let id in serverPlayers) {
                 let sp = serverPlayers[id];
