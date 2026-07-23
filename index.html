@@ -1,198 +1,157 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Online Pong (EzBridge)</title>
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <title>Server Replication Test - Multiplayer</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        * {
-            box-sizing: border-box;
-            user-select: none;
-            -webkit-user-select: none;
-            touch-action: none;
+        body { 
+            background: #09090b; 
+            color: #fff; 
+            font-family: sans-serif; 
+            text-align: center; 
+            margin: 0; 
+            overflow: hidden; 
+            touch-action: none; 
         }
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #030712;
-            color: #ffffff;
-            font-family: sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            overflow: hidden;
+        #status { 
+            padding: 10px; 
+            font-size: 1rem; 
+            background: #18181b; 
         }
-        #ui {
-            margin-bottom: 10px;
-            text-align: center;
+        #canvas-container { 
+            position: relative; 
+            width: 100vw; 
+            height: calc(100vh - 45px); 
+            background: #121214; 
+            cursor: crosshair; 
         }
-        #score {
-            font-size: 2rem;
-            font-weight: bold;
-        }
-        #role-info {
-            font-size: 0.9rem;
-            color: #94a3b8;
-        }
-        canvas {
-            background-color: #0f172a;
-            border: 2px solid #1e293b;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-            border-radius: 8px;
+        canvas { 
+            display: block; 
+            width: 100%; 
+            height: 100%; 
         }
     </style>
 </head>
 <body>
-
-    <div id="ui">
-        <div id="score">0 - 0</div>
-        <div id="role-info">Conectando...</div>
+    <div id="status">Connecting to EzBridge...</div>
+    <div id="canvas-container">
+        <canvas id="testCanvas"></canvas>
     </div>
 
-    <canvas id="gameCanvas"></canvas>
-
     <script>
-        const KEY = "146cf8ce56";
-        const TUNNEL_URL = "https://powder-gratuit-tunes-bread.trycloudflare.com";
+        const key = "146cf8ce56";
+        const link = "https://powder-gratuit-tunes-bread.trycloudflare.com";
+        const socket = io(link, { auth: { token: "default_key" } });
 
-        const canvas = document.getElementById("gameCanvas");
+        const canvas = document.getElementById("testCanvas");
         const ctx = canvas.getContext("2d");
-        const scoreEl = document.getElementById("score");
-        const roleEl = document.getElementById("role-info");
+        const statusEl = document.getElementById("status");
 
-        // Ajuste de tamanho dinâmico para telas mobile/PC
+        let isDragging = false;
+        let mouseX = 0;
+        let mouseY = 0;
+        
+        // Dictionary to store all players' server positions: { senderId: { x, y } }
+        let serverPositions = {};
+
         function resizeCanvas() {
-            const maxW = Math.min(window.innerWidth - 20, 800);
-            canvas.width = maxW;
-            canvas.height = maxW * 0.6;
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
         }
+        window.addEventListener('resize', resizeCanvas);
         resizeCanvas();
-        window.addEventListener("resize", resizeCanvas);
 
-        let myRole = 'spectator';
-        let serverState = {
-            p1Y: 0.5,
-            p2Y: 0.5,
-            ball: { x: 0.5, y: 0.5 },
-            score: { p1: 0, p2: 0 }
-        };
+        socket.on("connect", () => {
+            socket.emit("join_virtual_server", { key });
+        });
 
-        let targetBall = { x: 0.5, y: 0.5 };
-        let renderBall = { x: 0.5, y: 0.5 };
+        socket.on("joined_successfully", () => {
+            statusEl.innerText = "Connected! Drag anywhere to test multiplayer latency.";
+        });
 
-        let localPaddleY = 0.5;
+        socket.on("RemoteEvent", (pkt) => {
+            if (pkt.type === "positions_update") {
+                serverPositions = pkt.data;
+            }
+        });
 
-// Conexão WebSocket via Socket.io
-const socket = io(TUNNEL_URL, {
-    transports: ['websocket']
-});
+        function getEventPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            let clientX, clientY;
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
+        }
 
-socket.on('connect', () => {
-    roleEl.innerText = "Conectado. Autenticando...";
-    
-    // Autentica na sala virtual do EzBridge
-    socket.emit('join_virtual_server', { key: KEY });
-    
-    // Entra no jogo após autenticar
-    setTimeout(() => {
-        socket.emit('RemoteEvent', { type: 'join_game', data: {} });
-    }, 200);
-});
+        function startDrag(e) {
+            isDragging = true;
+            const pos = getEventPos(e);
+            mouseX = pos.x;
+            mouseY = pos.y;
+        }
 
-// O EzBridge redireciona eventos do ServerScript como 'RemoteEvent' para os clientes
-socket.on('RemoteEvent', (packet) => {
-    if (!packet || !packet.type) return;
+        function moveDrag(e) {
+            if (!isDragging) return;
+            const pos = getEventPos(e);
+            mouseX = pos.x;
+            mouseY = pos.y;
 
-    if (packet.type === 'player_assigned') {
-        myRole = packet.data.role;
-        if (myRole === 'p1') roleEl.innerText = "Você é o Jogador 1 (Esquerda)";
-        else if (myRole === 'p2') roleEl.innerText = "Você é o Jogador 2 (Direita)";
-        else roleEl.innerText = "Você é um Espectador";
-    }
-
-    if (packet.type === 'state_update') {
-        serverState = packet.data;
-        targetBall.x = packet.data.ball.x;
-        targetBall.y = packet.data.ball.y;
-        scoreEl.innerText = `${packet.data.score.p1} - ${packet.data.score.p2}`;
-    }
-});
-        // Controles de entrada (Touch e Mouse/Teclado)
-        function sendInput(yRatio) {
-            if (myRole === 'spectator') return;
-            localPaddleY = Math.max(0.1, Math.min(0.9, yRatio));
-            socket.emit('RemoteEvent', {
-                type: 'move_paddle',
-                data: { y: localPaddleY }
+            socket.emit("RemoteEvent", {
+                type: "update_position",
+                data: { x: mouseX, y: mouseY }
             });
         }
 
-        function handlePointerMove(e) {
-            const rect = canvas.getBoundingClientRect();
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            const yRatio = (clientY - rect.top) / rect.height;
-            sendInput(yRatio);
+        function endDrag() {
+            if (!isDragging) return;
+            isDragging = false;
+            socket.emit("RemoteEvent", {
+                type: "update_position",
+                data: { x: null, y: null }
+            });
         }
 
-        canvas.addEventListener('mousemove', handlePointerMove);
-        canvas.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            handlePointerMove(e);
-        }, { passive: false });
+        canvas.addEventListener('mousedown', startDrag);
+        canvas.addEventListener('mousemove', moveDrag);
+        window.addEventListener('mouseup', endDrag);
 
-        window.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowUp' || e.key === 'w') sendInput(localPaddleY - 0.05);
-            if (e.key === 'ArrowDown' || e.key === 's') sendInput(localPaddleY + 0.05);
-        });
+        canvas.addEventListener('touchstart', (e) => { startDrag(e); e.preventDefault(); });
+        canvas.addEventListener('touchmove', (e) => { moveDrag(e); e.preventDefault(); });
+        window.addEventListener('touchend', (e) => { endDrag(); e.preventDefault(); });
 
-        // Função de interpolação Lerp
-        function lerp(start, end, amt) {
-            return (1 - amt) * start + amt * end;
-        }
-
-        // Loop de Renderização no Cliente
         function render() {
-            // Suavização da bola com Lerp para mascarar latência
-            renderBall.x = lerp(renderBall.x, targetBall.x, 0.3);
-            renderBall.y = lerp(renderBall.y, targetBall.y, 0.3);
-
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Linha Central
-            ctx.setLineDash([6, 6]);
-            ctx.beginPath();
-            ctx.moveTo(canvas.width / 2, 0);
-            ctx.lineTo(canvas.width / 2, canvas.height);
-            ctx.strokeStyle = "#334155";
-            ctx.stroke();
-            ctx.setLineDash([]);
+            // 1. Render local user's active drag (50% transparent white circle)
+            if (isDragging) {
+                ctx.beginPath();
+                ctx.arc(mouseX, mouseY, 30, 0, Math.PI * 2);
+                ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+                ctx.fill();
+            }
 
-            const paddleW = canvas.width * 0.02;
-            const paddleH = canvas.height * 0.2;
-
-            // Raquete P1
-            const p1Y = myRole === 'p1' ? localPaddleY : serverState.p1Y;
-            ctx.fillStyle = "#38bdf8";
-            ctx.fillRect(canvas.width * 0.03, p1Y * canvas.height - paddleH / 2, paddleW, paddleH);
-
-            // Raquete P2
-            const p2Y = myRole === 'p2' ? localPaddleY : serverState.p2Y;
-            ctx.fillStyle = "#f43f5e";
-            ctx.fillRect(canvas.width * 0.95 - paddleW, p2Y * canvas.height - paddleH / 2, paddleW, paddleH);
-
-            // Bola (Network ownership total do servidor)
-            ctx.fillStyle = "#ffffff";
-            ctx.beginPath();
-            ctx.arc(renderBall.x * canvas.width, renderBall.y * canvas.height, canvas.width * 0.012, 0, Math.PI * 2);
-            ctx.fill();
+            // 2. Render all replicated server positions for everyone (yellow circles)
+            for (let id in serverPositions) {
+                const pos = serverPositions[id];
+                if (pos && pos.x !== null && pos.y !== null) {
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, 30, 0, Math.PI * 2);
+                    ctx.fillStyle = "yellow";
+                    ctx.fill();
+                }
+            }
 
             requestAnimationFrame(render);
         }
-
-        requestAnimationFrame(render);
+        render();
     </script>
 </body>
 </html>
