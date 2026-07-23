@@ -1,157 +1,618 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
-    <title>Server Replication Test - Multiplayer</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Html snakes</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        body { 
-            background: #09090b; 
-            color: #fff; 
-            font-family: sans-serif; 
-            text-align: center; 
-            margin: 0; 
-            overflow: hidden; 
-            touch-action: none; 
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
         }
-        #status { 
-            padding: 10px; 
-            font-size: 1rem; 
-            background: #18181b; 
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            font-family: Arial, sans-serif;
+            color: #fff;
         }
-        #canvas-container { 
-            position: relative; 
-            width: 100vw; 
-            height: calc(100vh - 45px); 
-            background: #121214; 
-            cursor: crosshair; 
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            background: #000;
         }
-        canvas { 
-            display: block; 
-            width: 100%; 
-            height: 100%; 
+        
+        /* UI do Menu */
+        #menuUI {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(20, 20, 20, 0.95);
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            border: 1px solid #333;
+            width: 320px;
+            text-align: center;
+            z-index: 10;
+        }
+        #menuUI h1 {
+            font-size: 28px;
+            margin-bottom: 20px;
+            color: #4CAF50;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .input-group {
+            margin-bottom: 15px;
+            text-align: left;
+        }
+        .input-group label {
+            display: block;
+            font-size: 13px;
+            margin-bottom: 5px;
+            color: #aaa;
+        }
+        .input-group input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #444;
+            background: #111;
+            color: #fff;
+            font-size: 16px;
+            outline: none;
+        }
+        .color-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        .color-slider {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 12px;
+        }
+        .color-slider input {
+            width: 60%;
+        }
+        #spawnBtn {
+            width: 100%;
+            padding: 12px;
+            background: #2e7d32;
+            border: none;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #spawnBtn:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        /* Barra de Progresso do Servidor */
+        #progressContainer {
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            max-width: 400px;
+            background: rgba(0,0,0,0.8);
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 8px 12px;
+            display: none;
+            z-index: 20;
+            text-align: center;
+        }
+        #progressBar {
+            width: 0%;
+            height: 12px;
+            background: #4CAF50;
+            border-radius: 6px;
+            transition: width 0.3s linear;
+            margin-top: 5px;
+        }
+        #progressText {
+            font-size: 12px;
+            color: #ccc;
         }
     </style>
 </head>
 <body>
-    <div id="status">Connecting to EzBridge...</div>
-    <div id="canvas-container">
-        <canvas id="testCanvas"></canvas>
+
+    <div id="progressContainer">
+        <div id="progressText">Gerando mapa... 0%</div>
+        <div id="progressBar"></div>
     </div>
 
+    <div id="menuUI">
+        <h1>Html snakes</h1>
+        <div class="input-group">
+            <label for="playerName">Nome de jogador (Max 10):</label>
+            <input type="text" id="playerName" maxlength="10" value="Snake">
+        </div>
+        <div class="color-group">
+            <label>Cor da sua cobra:</label>
+            <div class="color-slider">
+                <span style="color:#ff5555;">Vermelho: <span id="rVal">50%</span></span>
+                <input type="range" id="rSlider" min="0" max="100" value="50">
+            </div>
+            <div class="color-slider">
+                <span style="color:#55ff55;">Verde: <span id="gVal">50%</span></span>
+                <input type="range" id="gSlider" min="0" max="100" value="50">
+            </div>
+            <div class="color-slider">
+                <span style="color:#5555ff;">Azul: <span id="bVal">50%</span></span>
+                <input type="range" id="bSlider" min="0" max="100" value="50">
+            </div>
+        </div>
+        <button id="spawnBtn" disabled>Surgir</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
     <script>
-        const key = "146cf8ce56";
-        const link = "https://powder-gratuit-tunes-bread.trycloudflare.com";
-        const socket = io(link, { auth: { token: "default_key" } });
+        const MAP_SIZE = 5000;
+        const GRID_SIZE = 50;
+        const KEY = "146cf8ce56";
+        const LINK = "https://powder-gratuit-tunes-bread.trycloudflare.com";
 
-        const canvas = document.getElementById("testCanvas");
+        const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
-        const statusEl = document.getElementById("status");
 
-        let isDragging = false;
-        let mouseX = 0;
-        let mouseY = 0;
-        
-        // Dictionary to store all players' server positions: { senderId: { x, y } }
-        let serverPositions = {};
+        let socket = io(LINK, { auth: { token: "default_key" } });
+        let myId = null;
+        let mapReady = false;
+        let isAlive = false;
+        let isDeadPov = false;
+        let deathCameraPos = { x: 0, y: 0 };
+
+        // Estado do Jogo Local e Rede
+        let players = {}; 
+        let foods = {}; 
+
+        // Atributos Locais da Cobra
+        let mySnake = {
+            x: 0,
+            y: 0,
+            angle: 0,
+            length: 5,
+            score: 5,
+            segments: [],
+            color: "#808080",
+            name: "Snake",
+            isSprinting: false,
+            opacity: 1
+        };
+
+        // Inputs e Controles
+        let keys = {};
+        let touchMove = null;
+        let touchSprint = false;
+        let mousePos = { x: 0, y: 0 };
+        let isUsingMouse = false;
 
         function resizeCanvas() {
-            canvas.width = canvas.clientWidth;
-            canvas.height = canvas.clientHeight;
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
         }
-        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener("resize", resizeCanvas);
         resizeCanvas();
 
+        // UI Sliders Color Setup
+        const rSlider = document.getElementById("rSlider");
+        const gSlider = document.getElementById("gSlider");
+        const bSlider = document.getElementById("bSlider");
+        function updateColorLabels() {
+            document.getElementById("rVal").innerText = rSlider.value + "%";
+            document.getElementById("gVal").innerText = gSlider.value + "%";
+            document.getElementById("bVal").innerText = bSlider.value + "%";
+        }
+        [rSlider, gSlider, bSlider].forEach(s => s.addEventListener("input", updateColorLabels));
+
+        function getSelectedColor() {
+            let r = Math.round((rSlider.value / 100) * 255);
+            let g = Math.round((gSlider.value / 100) * 255);
+            let b = Math.round((bSlider.value / 100) * 255);
+            return `rgb(${r},${g},${b})`;
+        }
+
+        // Conexão do Socket
         socket.on("connect", () => {
-            socket.emit("join_virtual_server", { key });
+            socket.emit("join_virtual_server", { key: KEY });
         });
 
         socket.on("joined_successfully", () => {
-            statusEl.innerText = "Connected! Drag anywhere to test multiplayer latency.";
+            myId = socket.id;
+            socket.emit("RemoteEvent", { type: "join_game" });
         });
 
         socket.on("RemoteEvent", (pkt) => {
-            if (pkt.type === "positions_update") {
-                serverPositions = pkt.data;
-            }
-        });
+            if (pkt.type === "map_progress") {
+                const pContainer = document.getElementById("progressContainer");
+                const pBar = document.getElementById("progressBar");
+                const pText = document.getElementById("progressText");
+                
+                pContainer.style.display = "block";
+                pBar.style.width = pkt.data.progress + "%";
+                pText.innerText = `Gerando mapa... ${pkt.data.progress}%`;
 
-        function getEventPos(e) {
-            const rect = canvas.getBoundingClientRect();
-            let clientX, clientY;
-            if (e.touches && e.touches.length > 0) {
-                clientX = e.touches[0].clientX;
-                clientY = e.touches[0].clientY;
-            } else {
-                clientX = e.clientX;
-                clientY = e.clientY;
-            }
-            return {
-                x: clientX - rect.left,
-                y: clientY - rect.top
-            };
-        }
-
-        function startDrag(e) {
-            isDragging = true;
-            const pos = getEventPos(e);
-            mouseX = pos.x;
-            mouseY = pos.y;
-        }
-
-        function moveDrag(e) {
-            if (!isDragging) return;
-            const pos = getEventPos(e);
-            mouseX = pos.x;
-            mouseY = pos.y;
-
-            socket.emit("RemoteEvent", {
-                type: "update_position",
-                data: { x: mouseX, y: mouseY }
-            });
-        }
-
-        function endDrag() {
-            if (!isDragging) return;
-            isDragging = false;
-            socket.emit("RemoteEvent", {
-                type: "update_position",
-                data: { x: null, y: null }
-            });
-        }
-
-        canvas.addEventListener('mousedown', startDrag);
-        canvas.addEventListener('mousemove', moveDrag);
-        window.addEventListener('mouseup', endDrag);
-
-        canvas.addEventListener('touchstart', (e) => { startDrag(e); e.preventDefault(); });
-        canvas.addEventListener('touchmove', (e) => { moveDrag(e); e.preventDefault(); });
-        window.addEventListener('touchend', (e) => { endDrag(); e.preventDefault(); });
-
-        function render() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // 1. Render local user's active drag (50% transparent white circle)
-            if (isDragging) {
-                ctx.beginPath();
-                ctx.arc(mouseX, mouseY, 30, 0, Math.PI * 2);
-                ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
-                ctx.fill();
-            }
-
-            // 2. Render all replicated server positions for everyone (yellow circles)
-            for (let id in serverPositions) {
-                const pos = serverPositions[id];
-                if (pos && pos.x !== null && pos.y !== null) {
-                    ctx.beginPath();
-                    ctx.arc(pos.x, pos.y, 30, 0, Math.PI * 2);
-                    ctx.fillStyle = "yellow";
-                    ctx.fill();
+                if (pkt.data.progress >= 100) {
+                    mapReady = true;
+                    setTimeout(() => { pContainer.style.display = "none"; }, 500);
+                    if (!isAlive) document.getElementById("spawnBtn").disabled = false;
+                } else {
+                    mapReady = false;
+                    document.getElementById("spawnBtn").disabled = true;
                 }
             }
 
-            requestAnimationFrame(render);
+            if (pkt.type === "init_state") {
+                foods = pkt.data.foods;
+            }
+
+            if (pkt.type === "food_spawn") {
+                foods[pkt.data.id] = pkt.data;
+            }
+
+            if (pkt.type === "food_eaten") {
+                delete foods[pkt.data.id];
+            }
+
+            if (pkt.type === "player_update") {
+                if (pkt.senderId !== myId) {
+                    if (!players[pkt.senderId]) {
+                        players[pkt.senderId] = pkt.data;
+                        players[pkt.senderId].targetX = pkt.data.x;
+                        players[pkt.senderId].targetY = pkt.data.y;
+                        players[pkt.senderId].targetAngle = pkt.data.angle;
+                    } else {
+                        // Lerp linear para dados dos outros jogadores online
+                        let p = players[pkt.senderId];
+                        p.targetX = pkt.data.x;
+                        p.targetY = pkt.data.y;
+                        p.targetAngle = pkt.data.angle;
+                        p.score = pkt.data.score;
+                        p.segments = pkt.data.segments;
+                        p.color = pkt.data.color;
+                        p.name = pkt.data.name;
+                        p.opacity = pkt.data.opacity;
+                    }
+                }
+            }
+
+            if (pkt.type === "player_died") {
+                if (pkt.data.id === myId) {
+                    handleDeath();
+                } else {
+                    if (players[pkt.data.id]) {
+                        players[pkt.data.id].opacity = 0;
+                        setTimeout(() => delete players[pkt.data.id], 500);
+                    }
+                }
+            }
+        });
+
+        // Clique em Surgir
+        document.getElementById("spawnBtn").addEventListener("click", () => {
+            if (!mapReady) return;
+            const name = document.getElementById("playerName").value.trim() || "Snake";
+            mySnake.name = name.substring(0, 10);
+            mySnake.color = getSelectedColor();
+            mySnake.x = Math.random() * (MAP_SIZE - 200) + 100;
+            mySnake.y = Math.random() * (MAP_SIZE - 200) + 100;
+            mySnake.score = 5;
+            mySnake.angle = 0;
+            mySnake.opacity = 1;
+            mySnake.segments = [];
+            for (let i = 0; i < mySnake.score; i++) {
+                mySnake.segments.push({ x: mySnake.x, y: mySnake.y });
+            }
+
+            isAlive = true;
+            isDeadPov = false;
+            document.getElementById("menuUI").style.display = "none";
+
+            socket.emit("RemoteEvent", {
+                type: "player_spawn",
+                data: {
+                    x: mySnake.x,
+                    y: mySnake.y,
+                    color: mySnake.color,
+                    name: mySnake.name,
+                    score: mySnake.score
+                }
+            });
+        });
+
+        // Entrada de Teclado e Mouse (PC)
+        window.addEventListener("keydown", (e) => {
+            keys[e.key.toLowerCase()] = true;
+            isUsingMouse = false;
+        });
+        window.addEventListener("keyup", (e) => {
+            keys[e.key.toLowerCase()] = false;
+        });
+        window.addEventListener("mousemove", (e) => {
+            mousePos = { x: e.clientX, y: e.clientY };
+            isUsingMouse = true;
+        });
+
+        // Entrada Touch (Celular)
+        window.addEventListener("touchstart", (e) => {
+            if (!isAlive) return;
+            if (e.touches.length === 1) {
+                touchMove = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                touchSprint = false;
+            } else if (e.touches.length >= 2) {
+                touchSprint = true;
+            }
+        });
+
+        window.addEventListener("touchmove", (e) => {
+            if (!isAlive) return;
+            if (e.touches.length >= 1) {
+                touchMove = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }
+        });
+
+        window.addEventListener("touchend", (e) => {
+            if (e.touches.length < 2) touchSprint = false;
+            if (e.touches.length === 0) touchMove = null;
+        });
+
+        // Sprint e Consumo de Comida
+        let sprintTimer = 0;
+        function updateLogic(dt) {
+            if (!isAlive) return;
+
+            // Checa Sprint
+            let wantSprint = keys[' '] || keys['e'] || touchSprint;
+            mySnake.isSprinting = wantSprint && mySnake.score >= 6;
+
+            let speed = mySnake.isSprinting ? 225 : 150; // px/s
+
+            if (mySnake.isSprinting) {
+                sprintTimer += dt;
+                if (sprintTimer >= 0.3) {
+                    sprintTimer = 0;
+                    mySnake.score--;
+                    if (mySnake.score < 6) mySnake.isSprinting = false;
+                }
+            } else {
+                sprintTimer = 0;
+            }
+
+            // Direção
+            let dirX = 0;
+            let dirY = 0;
+
+            if (touchMove) {
+                let dx = touchMove.x - canvas.width / 2;
+                let dy = touchMove.y - canvas.height / 2;
+                mySnake.angle = Math.atan2(dy, dx);
+            } else if (isUsingMouse) {
+                let dx = mousePos.x - canvas.width / 2;
+                let dy = mousePos.y - canvas.height / 2;
+                mySnake.angle = Math.atan2(dy, dx);
+            } else {
+                if (keys['a'] || keys['arrowleft']) dirX -= 1;
+                if (keys['d'] || keys['arrowright']) dirX += 1;
+                if (keys['w'] || keys['arrowup']) dirY -= 1;
+                if (keys['s'] || keys['arrowdown']) dirY += 1;
+
+                if (dirX !== 0 || dirY !== 0) {
+                    mySnake.angle = Math.atan2(dirY, dirX);
+                }
+            }
+
+            // Mover Cabeça
+            mySnake.x += Math.cos(mySnake.angle) * speed * dt;
+            mySnake.y += Math.sin(mySnake.angle) * speed * dt;
+
+            // Colisão com Bordas
+            if (mySnake.x <= 0 || mySnake.x >= MAP_SIZE || mySnake.y <= 0 || mySnake.y >= MAP_SIZE) {
+                die(false); // Borda não dropa comida
+                return;
+            }
+
+            // Atualizar Segmentos
+            mySnake.segments.unshift({ x: mySnake.x, y: mySnake.y });
+            while (mySnake.segments.length > mySnake.score) {
+                mySnake.segments.pop();
+            }
+
+            // Colisão com Bolas
+            let headRadius = 10 + mySnake.score * 0.1;
+            for (let id in foods) {
+                let f = foods[id];
+                let dist = Math.hypot(mySnake.x - f.x, mySnake.y - f.y);
+                if (dist < headRadius + f.radius) {
+                    mySnake.score += 1;
+                    socket.emit("RemoteEvent", { type: "eat_food", data: { id: id } });
+                    delete foods[id];
+                }
+            }
         }
-        render();
+
+        function die(dropFood = true) {
+            if (!isAlive) return;
+            isAlive = false;
+            deathCameraPos = { x: mySnake.x, y: mySnake.y };
+            isDeadPov = true;
+
+            socket.emit("RemoteEvent", {
+                type: "player_die",
+                data: {
+                    dropFood: dropFood,
+                    segments: mySnake.segments
+                }
+            });
+
+            handleDeath();
+        }
+
+        function handleDeath() {
+            isAlive = false;
+            mySnake.opacity = 0;
+            
+            // 2s em POV preso e volta pro menu
+            setTimeout(() => {
+                isDeadPov = false;
+                document.getElementById("menuUI").style.display = "block";
+            }, 2000);
+        }
+
+        // Loop de Atualização de Rede (30 requisições por segundo)
+        setInterval(() => {
+            if (isAlive) {
+                socket.emit("RemoteEvent", {
+                    type: "player_update",
+                    data: {
+                        x: mySnake.x,
+                        y: mySnake.y,
+                        angle: mySnake.angle,
+                        score: mySnake.score,
+                        segments: mySnake.segments,
+                        color: mySnake.color,
+                        name: mySnake.name,
+                        opacity: mySnake.opacity
+                    }
+                });
+            }
+        }, 1000 / 30);
+
+        // Renderização e Interpolação (Lerp)
+        let lastTime = performance.now();
+        function draw() {
+            let now = performance.now();
+            let dt = (now - lastTime) / 1000;
+            lastTime = now;
+
+            updateLogic(dt);
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Câmera
+            let camX = isAlive ? mySnake.x : deathCameraPos.x;
+            let camY = isAlive ? mySnake.y : deathCameraPos.y;
+
+            ctx.save();
+            ctx.translate(canvas.width / 2 - camX, canvas.height / 2 - camY);
+
+            // Grade do Mapa
+            ctx.strokeStyle = "#1a1a1a";
+            ctx.lineWidth = 1;
+            let startX = Math.floor((camX - canvas.width / 2) / GRID_SIZE) * GRID_SIZE;
+            let endX = startX + canvas.width + GRID_SIZE * 2;
+            let startY = Math.floor((camY - canvas.height / 2) / GRID_SIZE) * GRID_SIZE;
+            let endY = startY + canvas.height + GRID_SIZE * 2;
+
+            for (let x = startX; x < endX; x += GRID_SIZE) {
+                if (x >= 0 && x <= MAP_SIZE) {
+                    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MAP_SIZE); ctx.stroke();
+                }
+            }
+            for (let y = startY; y < endY; y += GRID_SIZE) {
+                if (y >= 0 && y <= MAP_SIZE) {
+                    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(MAP_SIZE, y); ctx.stroke();
+                }
+            }
+
+            // Borda Vermelha Quadrada
+            ctx.strokeStyle = "#ff0000";
+            ctx.lineWidth = 6;
+            ctx.strokeRect(0, 0, MAP_SIZE, MAP_SIZE);
+
+            // Desenhar Comidas (Bolas)
+            for (let id in foods) {
+                let f = foods[id];
+                ctx.fillStyle = f.color;
+                ctx.beginPath();
+                ctx.arc(f.x, f.y, f.radius || 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Interpolador (Lerp) e Renderizador de Jogadores Conectados
+            for (let id in players) {
+                let p = players[id];
+                p.x += (p.targetX - p.x) * 0.2; // Lerp Linear suave
+                p.y += (p.targetY - p.y) * 0.2;
+                p.angle += (p.targetAngle - p.angle) * 0.2;
+
+                drawSnake(p);
+            }
+
+            // Desenhar Cobra Local
+            if (isAlive) {
+                drawSnake(mySnake);
+            }
+
+            ctx.restore();
+            requestAnimationFrame(draw);
+        }
+
+        function drawSnake(s) {
+            if (!s.segments || s.segments.length === 0 || s.opacity <= 0) return;
+
+            ctx.save();
+            ctx.globalAlpha = s.opacity !== undefined ? s.opacity : 1;
+
+            let radius = 10 + (s.score || 5) * 0.1;
+
+            // Corpo
+            ctx.fillStyle = s.color;
+            for (let i = s.segments.length - 1; i >= 0; i--) {
+                let seg = s.segments[i];
+                ctx.beginPath();
+                ctx.arc(seg.x, seg.y, radius * (1 - (i / s.segments.length) * 0.2), 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Cabeça e Olhos (Olhando na Direção)
+            let head = s.segments[0] || { x: s.x, y: s.y };
+            let angle = s.angle || 0;
+
+            ctx.save();
+            ctx.translate(head.x, head.y);
+            ctx.rotate(angle);
+
+            // Olhos
+            ctx.fillStyle = "#fff";
+            ctx.beginPath(); ctx.arc(radius * 0.4, -radius * 0.5, radius * 0.35, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(radius * 0.4, radius * 0.5, radius * 0.35, 0, Math.PI * 2); ctx.fill();
+
+            // Pupilas
+            ctx.fillStyle = "#000";
+            ctx.beginPath(); ctx.arc(radius * 0.5, -radius * 0.5, radius * 0.18, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(radius * 0.5, radius * 0.5, radius * 0.18, 0, Math.PI * 2); ctx.fill();
+
+            ctx.restore();
+
+            // Nome e Pontuação
+            ctx.fillStyle = "#fff";
+            ctx.font = "bold 12px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(s.name || "", head.x, head.y - radius - 8);
+
+            ctx.restore();
+        }
+
+        requestAnimationFrame(draw);
     </script>
 </body>
 </html>
