@@ -1,40 +1,41 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat Global Online</title>
+    <title>Server Replication Test - Multiplayer</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: #030712; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; justify-content: center; align-items: center; }
-        #chat-container { width: 100%; max-width: 500px; height: 90vh; display: flex; flex-direction: column; background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; overflow: hidden; }
-        #header { padding: 12px 16px; background: #1e293b; border-bottom: 1px solid #334155; }
-        #status { font-size: 0.85rem; color: #06b6d4; font-weight: bold; }
-        #user-id { font-size: 0.75rem; color: #94a3b8; margin-top: 4px; word-break: break-all; }
-        #messages { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-        .msg { background: #1e293b; padding: 10px; border-radius: 8px; max-width: 85%; word-break: break-word; font-size: 0.95rem; }
-        .msg.mine { align-self: flex-end; background: #2563eb; color: #fff; }
-        .msg.system { align-self: center; background: transparent; color: #64748b; font-size: 0.8rem; font-style: italic; }
-        .msg .sender { font-size: 0.7rem; color: #94a3b8; display: block; margin-bottom: 3px; }
-        .msg.mine .sender { color: #cbd5e1; }
-        #input-container { display: flex; padding: 12px; background: #0f172a; border-top: 1px solid #1e293b; gap: 8px; }
-        #message-input { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #020617; color: #fff; font-size: 1rem; outline: none; }
-        #send-btn { padding: 12px 20px; border-radius: 8px; border: none; background: #06b6d4; color: #000; font-weight: bold; font-size: 1rem; cursor: pointer; min-height: 44px; min-width: 44px; }
-        #send-btn:active { background: #0891b2; }
+        body { 
+            background: #09090b; 
+            color: #fff; 
+            font-family: sans-serif; 
+            text-align: center; 
+            margin: 0; 
+            overflow: hidden; 
+            touch-action: none; 
+        }
+        #status { 
+            padding: 10px; 
+            font-size: 1rem; 
+            background: #18181b; 
+        }
+        #canvas-container { 
+            position: relative; 
+            width: 100vw; 
+            height: calc(100vh - 45px); 
+            background: #121214; 
+            cursor: crosshair; 
+        }
+        canvas { 
+            display: block; 
+            width: 100%; 
+            height: 100%; 
+        }
     </style>
 </head>
 <body>
-    <div id="chat-container">
-        <div id="header">
-            <div id="status">Conectando...</div>
-            <div id="user-id">ID: ---</div>
-        </div>
-        <div id="messages"></div>
-        <div id="input-container">
-            <input type="text" id="message-input" placeholder="Digite sua mensagem..." autocomplete="off">
-            <button id="send-btn" onclick="sendMessage()">Enviar</button>
-        </div>
+    <div id="status">Connecting to EzBridge...</div>
+    <div id="canvas-container">
+        <canvas id="testCanvas"></canvas>
     </div>
 
     <script>
@@ -42,76 +43,115 @@
         const link = "https://vegetarian-aim-ability-almost.trycloudflare.com";
         const socket = io(link, { auth: { token: "default_key" } });
 
-        let myUserId = null;
+        const canvas = document.getElementById("testCanvas");
+        const ctx = canvas.getContext("2d");
+        const statusEl = document.getElementById("status");
+
+        let isDragging = false;
+        let mouseX = 0;
+        let mouseY = 0;
+        
+        // Dictionary to store all players' server positions: { senderId: { x, y } }
+        let serverPositions = {};
+
+        function resizeCanvas() {
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
 
         socket.on("connect", () => {
             socket.emit("join_virtual_server", { key });
         });
 
         socket.on("joined_successfully", () => {
-            document.getElementById("status").innerText = "Status: Online (Chat Global)";
-            socket.emit("RemoteEvent", { type: "ebuserid_get" });
-            socket.emit("RemoteEvent", { type: "join_chat" });
+            statusEl.innerText = "Connected! Drag anywhere to test multiplayer latency.";
         });
 
         socket.on("RemoteEvent", (pkt) => {
-            if (pkt.type === "ebuserid_get_response") {
-                myUserId = pkt.data.userId;
-                document.getElementById("user-id").innerText = "Seu ID: " + myUserId;
-            }
-
-            if (pkt.type === "chat_history") {
-                const chatBox = document.getElementById("messages");
-                chatBox.innerHTML = "";
-                pkt.data.history.forEach(msg => appendMessage(msg));
-            }
-
-            if (pkt.type === "new_message") {
-                appendMessage(pkt.data);
+            if (pkt.type === "positions_update") {
+                serverPositions = pkt.data;
             }
         });
 
-        function appendMessage(msg) {
-            const chatBox = document.getElementById("messages");
-            const msgDiv = document.createElement("div");
-            
-            if (msg.type === "system") {
-                msgDiv.className = "msg system";
-                msgDiv.innerText = msg.text;
+        function getEventPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            let clientX, clientY;
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
             } else {
-                const isMine = msg.senderId === myUserId;
-                msgDiv.className = "msg " + (isMine ? "mine" : "");
-                
-                const senderSpan = document.createElement("span");
-                senderSpan.className = "sender";
-                senderSpan.innerText = isMine ? "Você" : msg.senderId.substring(0, 8) + "...";
-                
-                const textSpan = document.createElement("span");
-                textSpan.innerText = msg.text;
-
-                msgDiv.appendChild(senderSpan);
-                msgDiv.appendChild(textSpan);
+                clientX = e.clientX;
+                clientY = e.clientY;
             }
-
-            chatBox.appendChild(msgDiv);
-            chatBox.scrollTop = chatBox.scrollHeight;
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
         }
 
-        function sendMessage() {
-            const input = document.getElementById("message-input");
-            const text = input.value.trim();
-            if (text.length > 0) {
-                socket.emit("RemoteEvent", { 
-                    type: "send_message", 
-                    data: { text: text } 
-                });
-                input.value = "";
-            }
+        function startDrag(e) {
+            isDragging = true;
+            const pos = getEventPos(e);
+            mouseX = pos.x;
+            mouseY = pos.y;
         }
 
-        document.getElementById("message-input").addEventListener("keypress", (e) => {
-            if (e.key === "Enter") sendMessage();
-        });
+        function moveDrag(e) {
+            if (!isDragging) return;
+            const pos = getEventPos(e);
+            mouseX = pos.x;
+            mouseY = pos.y;
+
+            socket.emit("RemoteEvent", {
+                type: "update_position",
+                data: { x: mouseX, y: mouseY }
+            });
+        }
+
+        function endDrag() {
+            if (!isDragging) return;
+            isDragging = false;
+            socket.emit("RemoteEvent", {
+                type: "update_position",
+                data: { x: null, y: null }
+            });
+        }
+
+        canvas.addEventListener('mousedown', startDrag);
+        canvas.addEventListener('mousemove', moveDrag);
+        window.addEventListener('mouseup', endDrag);
+
+        canvas.addEventListener('touchstart', (e) => { startDrag(e); e.preventDefault(); });
+        canvas.addEventListener('touchmove', (e) => { moveDrag(e); e.preventDefault(); });
+        window.addEventListener('touchend', (e) => { endDrag(); e.preventDefault(); });
+
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. Render local user's active drag (50% transparent white circle)
+            if (isDragging) {
+                ctx.beginPath();
+                ctx.arc(mouseX, mouseY, 30, 0, Math.PI * 2);
+                ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+                ctx.fill();
+            }
+
+            // 2. Render all replicated server positions for everyone (yellow circles)
+            for (let id in serverPositions) {
+                const pos = serverPositions[id];
+                if (pos && pos.x !== null && pos.y !== null) {
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, 30, 0, Math.PI * 2);
+                    ctx.fillStyle = "yellow";
+                    ctx.fill();
+                }
+            }
+
+            requestAnimationFrame(render);
+        }
+        render();
     </script>
 </body>
 </html>
