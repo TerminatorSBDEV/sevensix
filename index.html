@@ -1,25 +1,40 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
-    <title>Global Chat</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Global Online</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        body { background: #030712; color: #fff; font-family: sans-serif; margin: 0; padding: 20px; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
-        h2 { margin-top: 0; text-align: center; }
-        #chat-box { flex: 1; background: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 15px; overflow-y: auto; margin-bottom: 15px; display: flex; flex-direction: column; gap: 8px; }
-        .message { background: #1e293b; padding: 10px; border-radius: 6px; word-break: break-word; }
-        .input-area { display: flex; gap: 10px; }
-        input { flex: 1; padding: 12px; border-radius: 6px; border: 1px solid #1e293b; background: #0f172a; color: #fff; font-size: 1rem; }
-        button { padding: 12px 20px; border-radius: 6px; border: none; background: #06b6d4; color: #030712; font-weight: bold; cursor: pointer; font-size: 1rem; }
-        button:active { background: #0891b2; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #030712; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; justify-content: center; align-items: center; }
+        #chat-container { width: 100%; max-width: 500px; height: 90vh; display: flex; flex-direction: column; background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; overflow: hidden; }
+        #header { padding: 12px 16px; background: #1e293b; border-bottom: 1px solid #334155; }
+        #status { font-size: 0.85rem; color: #06b6d4; font-weight: bold; }
+        #user-id { font-size: 0.75rem; color: #94a3b8; margin-top: 4px; word-break: break-all; }
+        #messages { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        .msg { background: #1e293b; padding: 10px; border-radius: 8px; max-width: 85%; word-break: break-word; font-size: 0.95rem; }
+        .msg.mine { align-self: flex-end; background: #2563eb; color: #fff; }
+        .msg.system { align-self: center; background: transparent; color: #64748b; font-size: 0.8rem; font-style: italic; }
+        .msg .sender { font-size: 0.7rem; color: #94a3b8; display: block; margin-bottom: 3px; }
+        .msg.mine .sender { color: #cbd5e1; }
+        #input-container { display: flex; padding: 12px; background: #0f172a; border-top: 1px solid #1e293b; gap: 8px; }
+        #message-input { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #334155; background: #020617; color: #fff; font-size: 1rem; outline: none; }
+        #send-btn { padding: 12px 20px; border-radius: 8px; border: none; background: #06b6d4; color: #000; font-weight: bold; font-size: 1rem; cursor: pointer; min-height: 44px; min-width: 44px; }
+        #send-btn:active { background: #0891b2; }
     </style>
 </head>
 <body>
-    <h2>Global Chat</h2>
-    <div id="chat-box"></div>
-    <div class="input-area">
-        <input type="text" id="messageInput" placeholder="Type a message..." onkeydown="if(event.key==='Enter') sendMessage()">
-        <button onclick="sendMessage()">Send</button>
+    <div id="chat-container">
+        <div id="header">
+            <div id="status">Conectando...</div>
+            <div id="user-id">ID: ---</div>
+        </div>
+        <div id="messages"></div>
+        <div id="input-container">
+            <input type="text" id="message-input" placeholder="Digite sua mensagem..." autocomplete="off">
+            <button id="send-btn" onclick="sendMessage()">Enviar</button>
+        </div>
     </div>
 
     <script>
@@ -27,33 +42,76 @@
         const link = "https://vegetarian-aim-ability-almost.trycloudflare.com";
         const socket = io(link, { auth: { token: "default_key" } });
 
+        let myUserId = null;
+
         socket.on("connect", () => {
             socket.emit("join_virtual_server", { key });
         });
 
         socket.on("joined_successfully", () => {
-            console.log("Connected to chat server");
+            document.getElementById("status").innerText = "Status: Online (Chat Global)";
+            socket.emit("RemoteEvent", { type: "ebuserid_get" });
+            socket.emit("RemoteEvent", { type: "join_chat" });
         });
 
         socket.on("RemoteEvent", (pkt) => {
-            if (pkt.type === "chat_message") {
-                const chatBox = document.getElementById("chat-box");
-                const msgDiv = document.createElement("div");
-                msgDiv.className = "message";
-                msgDiv.innerText = `${pkt.data.sender}: ${pkt.data.text}`;
-                chatBox.appendChild(msgDiv);
-                chatBox.scrollTop = chatBox.scrollHeight;
+            if (pkt.type === "ebuserid_get_response") {
+                myUserId = pkt.data.userId;
+                document.getElementById("user-id").innerText = "Seu ID: " + myUserId;
+            }
+
+            if (pkt.type === "chat_history") {
+                const chatBox = document.getElementById("messages");
+                chatBox.innerHTML = "";
+                pkt.data.history.forEach(msg => appendMessage(msg));
+            }
+
+            if (pkt.type === "new_message") {
+                appendMessage(pkt.data);
             }
         });
 
-        function sendMessage() {
-            const input = document.getElementById("messageInput");
-            const text = input.value.trim();
-            if (!text) return;
+        function appendMessage(msg) {
+            const chatBox = document.getElementById("messages");
+            const msgDiv = document.createElement("div");
+            
+            if (msg.type === "system") {
+                msgDiv.className = "msg system";
+                msgDiv.innerText = msg.text;
+            } else {
+                const isMine = msg.senderId === myUserId;
+                msgDiv.className = "msg " + (isMine ? "mine" : "");
+                
+                const senderSpan = document.createElement("span");
+                senderSpan.className = "sender";
+                senderSpan.innerText = isMine ? "Você" : msg.senderId.substring(0, 8) + "...";
+                
+                const textSpan = document.createElement("span");
+                textSpan.innerText = msg.text;
 
-            socket.emit("RemoteEvent", { type: "send_message", data: { text } });
-            input.value = "";
+                msgDiv.appendChild(senderSpan);
+                msgDiv.appendChild(textSpan);
+            }
+
+            chatBox.appendChild(msgDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
         }
+
+        function sendMessage() {
+            const input = document.getElementById("message-input");
+            const text = input.value.trim();
+            if (text.length > 0) {
+                socket.emit("RemoteEvent", { 
+                    type: "send_message", 
+                    data: { text: text } 
+                });
+                input.value = "";
+            }
+        }
+
+        document.getElementById("message-input").addEventListener("keypress", (e) => {
+            if (e.key === "Enter") sendMessage();
+        });
     </script>
 </body>
 </html>
