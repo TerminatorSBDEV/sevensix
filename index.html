@@ -2,329 +2,725 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>HTML Snakes</title>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
-        body {
+        * {
+            box-sizing: border-box;
             margin: 0;
-            background: #09090b;
-            color: #fff;
-            font-family: sans-serif;
-            overflow: hidden;
+            padding: 0;
             user-select: none;
             -webkit-user-select: none;
+            touch-action: none;
         }
-        #menu {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            background: #121216;
-        }
-        #menu h1 {
-            font-size: 2.5rem;
-            margin-bottom: 20px;
-            color: #00ff88;
-        }
-        .menu-group {
-            margin-bottom: 15px;
-            text-align: left;
-            width: 250px;
-        }
-        .menu-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-size: 0.9rem;
-        }
-        .menu-group input[type="text"] {
+
+        body, html {
             width: 100%;
-            padding: 8px;
-            background: #1e1e24;
-            border: 1px solid #333;
-            color: #fff;
-            border-radius: 4px;
-            box-sizing: border-box;
-        }
-        .color-options {
-            display: flex;
-            justify-content: space-between;
-        }
-        .color-btn {
-            flex: 1;
-            padding: 8px;
-            margin: 0 2px;
-            border: 2px solid transparent;
-            cursor: pointer;
-            border-radius: 4px;
-            font-weight: bold;
-            text-align: center;
-        }
-        .color-btn.selected { border-color: #fff; }
-        #btnRed { background: #ff4444; }
-        #btnGreen { background: #44ff44; color: #000; }
-        #btnBlue { background: #4444ff; }
-        #spawnBtn {
-            width: 250px;
-            padding: 10px;
-            background: #00ff88;
-            border: none;
-            color: #000;
-            font-weight: bold;
-            font-size: 1rem;
-            cursor: pointer;
-            border-radius: 4px;
-            margin-top: 10px;
-        }
-        #spawnBtn:disabled { background: #555; cursor: not-allowed; }
-        #loadingScreen {
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-        }
-        #progressBarContainer {
-            width: 300px;
-            height: 20px;
-            background: #222;
-            border: 1px solid #444;
-            border-radius: 10px;
+            height: 100%;
             overflow: hidden;
-            margin-top: 15px;
+            background-color: #000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #fff;
         }
-        #progressBar {
+
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            background-color: #000;
+        }
+
+        /* Loading Bar Overlay */
+        #loadingOverlay {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            max-width: 400px;
+            background: rgba(20, 20, 20, 0.85);
+            border: 1px solid #444;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            z-index: 10;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+
+        #loadingBarContainer {
+            width: 100%;
+            height: 15px;
+            background: #222;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-top: 10px;
+            border: 1px solid #555;
+        }
+
+        #loadingBar {
             width: 0%;
             height: 100%;
-            background: #00ff88;
-            transition: width 0.5s linear;
+            background: #00ff66;
+            transition: width 0.3s ease;
         }
-        #gameCanvas {
-            display: none;
-            background: #000;
-            touch-action: none;
+
+        /* Menu UI */
+        #menuOverlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(15, 15, 15, 0.95);
+            border: 2px solid #333;
+            padding: 30px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 380px;
+            text-align: center;
+            z-index: 20;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+        }
+
+        #menuOverlay h1 {
+            font-size: 2rem;
+            margin-bottom: 20px;
+            color: #fff;
+            letter-spacing: 1px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 0.9rem;
+            margin-bottom: 6px;
+            color: #aaa;
+        }
+
+        .input-group input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #444;
+            background: #222;
+            color: #fff;
+            font-size: 1rem;
+            outline: none;
+        }
+
+        .color-sliders {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .slider-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.85rem;
+        }
+
+        .slider-row input[type="range"] {
+            width: 60%;
+            accent-color: #00ff66;
+        }
+
+        #spawnBtn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            background: #222;
+            color: #666;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: not-allowed;
+            transition: 0.2s;
+            margin-top: 10px;
+        }
+
+        #spawnBtn.active {
+            background: #00ff66;
+            color: #000;
+            cursor: pointer;
+        }
+
+        #spawnBtn.active:hover {
+            background: #00cc52;
+        }
+
+        #statusText {
+            margin-top: 10px;
+            font-size: 0.8rem;
+            color: #ff4444;
         }
     </style>
 </head>
 <body>
 
-    <div id="menu">
-        <h1>Html snakes</h1>
-        <div class="menu-group">
-            <label>Nome de jogador: (10 max)</label>
-            <input type="text" id="playerName" maxlength="10" placeholder="SeuNome">
+    <div id="loadingOverlay">
+        <div id="loadingText">Criando mapa do servidor... (0%)</div>
+        <div id="loadingBarContainer">
+            <div id="loadingBar"></div>
         </div>
-        <div class="menu-group">
-            <label>Cor da sua cobra:</label>
-            <div class="color-options">
-                <div class="color-btn selected" id="btnRed" onclick="setColor('#ff4444')">Vermelho</div>
-                <div class="color-btn" id="btnGreen" onclick="setColor('#44ff44')">Verde</div>
-                <div class="color-btn" id="btnBlue" onclick="setColor('#4444ff')">Azul</div>
-            </div>
-        </div>
-        <button id="spawnBtn" onclick="requestSpawn()">Surgir</button>
     </div>
 
-    <div id="loadingScreen">
-        <h2 id="loadingText">Criando mapa...</h2>
-        <div id="progressBarContainer">
-            <div id="progressBar"></div>
+    <div id="menuOverlay">
+        <h1>Html snakes</h1>
+        <div class="input-group">
+            <label for="playerName">Nome de jogador:</label>
+            <input type="text" id="playerName" maxlength="10" placeholder="Max 10 chars">
         </div>
+        <div class="input-group">
+            <label>Cor da sua cobra:</label>
+            <div class="color-sliders">
+                <div class="slider-row">
+                    <span style="color:#ff5555;">Vermelho: <span id="rVal">50%</span></span>
+                    <input type="range" id="redSlider" min="0" max="100" value="50">
+                </div>
+                <div class="slider-row">
+                    <span style="color:#55ff55;">Verde: <span id="gVal">50%</span></span>
+                    <input type="range" id="greenSlider" min="0" max="100" value="50">
+                </div>
+                <div class="slider-row">
+                    <span style="color:#5555ff;">Azul: <span id="bVal">50%</span></span>
+                    <input type="range" id="blueSlider" min="0" max="100" value="50">
+                </div>
+            </div>
+        </div>
+        <button id="spawnBtn" disabled>[Surgir]</button>
+        <div id="statusText">Conectando ao servidor...</div>
     </div>
 
     <canvas id="gameCanvas"></canvas>
 
     <script>
-        const key = "146cf8ce56";
-        const link = "https://powder-gratuit-tunes-bread.trycloudflare.com";
-        const socket = io(link, { auth: { token: "default_key" } });
+        // Configurações do Servidor
+        const KEY = "146cf8ce56";
+        const LINK = "https://powder-gratuit-tunes-bread.trycloudflare.com";
+        const socket = io(LINK, { auth: { token: "default_key" } });
 
-        let selectedColor = "#ff4444";
-        let isConnecting = true;
-        let mapInitializing = false;
-        let inGame = false;
+        // Constantes do Jogo
+        const MAP_SIZE = 5000;
+        const GRID_SIZE = 50;
 
+        // Elementos DOM
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
+        const loadingOverlay = document.getElementById("loadingOverlay");
+        const loadingText = document.getElementById("loadingText");
+        const loadingBar = document.getElementById("loadingBar");
+        const menuOverlay = document.getElementById("menuOverlay");
+        const spawnBtn = document.getElementById("spawnBtn");
+        const statusText = document.getElementById("statusText");
+        const playerNameInput = document.getElementById("playerName");
 
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+        const redSlider = document.getElementById("redSlider");
+        const greenSlider = document.getElementById("greenSlider");
+        const blueSlider = document.getElementById("blueSlider");
+        const rVal = document.getElementById("rVal");
+        const gVal = document.getElementById("gVal");
+        const bVal = document.getElementById("bVal");
 
-        window.addEventListener("resize", () => {
+        // Estado do Cliente
+        let myId = null;
+        let isMapReady = false;
+        let isAlive = false;
+        let isDeadCamera = false;
+        let deadCameraPos = { x: MAP_SIZE / 2, y: MAP_SIZE / 2 };
+
+        let players = {}; // id -> dados do jogador
+        let foodList = {}; // id -> dados da comida
+
+        // Estado Local do Jogador
+        let mySnake = {
+            x: 0,
+            y: 0,
+            angle: 0,
+            score: 5, // Vida/Tamanho inicial
+            speed: 180, // pixels por segundo
+            isSprinting: false,
+            segments: [],
+            color: "rgb(127,127,127)",
+            name: ""
+        };
+
+        // Inputs
+        let keys = {};
+        let mousePos = { x: 0, y: 0 };
+        let touchPos = null;
+        let isTouching = false;
+        let touchSecondFinger = false;
+        let lastSprintConsume = 0;
+
+        // Ajuste de Tela
+        function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-        });
-
-        function setColor(color) {
-            selectedColor = color;
-            document.querySelectorAll(".color-btn").forEach(b => b.classList.remove("selected"));
-            if(color === "#ff4444") document.getElementById("btnRed").classList.add("selected");
-            if(color === "#44ff44") document.getElementById("btnGreen").classList.add("selected");
-            if(color === "#4444ff") document.getElementById("btnBlue").classList.add("selected");
         }
+        window.addEventListener("resize", resizeCanvas);
+        resizeCanvas();
 
+        // UI Sliders
+        function updateColorPreview() {
+            rVal.innerText = redSlider.value + "%";
+            gVal.innerText = greenSlider.value + "%";
+            bVal.innerText = blueSlider.value + "%";
+        }
+        [redSlider, greenSlider, blueSlider].forEach(s => s.addEventListener("input", updateColorPreview));
+
+        // Conexão Socket.io
         socket.on("connect", () => {
-            socket.emit("join_virtual_server", { key });
+            statusText.innerText = "Entrando no servidor virtual...";
+            socket.emit("join_virtual_server", { key: KEY });
         });
 
         socket.on("joined_successfully", () => {
-            isConnecting = false;
+            statusText.innerText = "Aguardando geração do mapa...";
+            socket.emit("RemoteEvent", { type: "check_map_status" });
         });
 
+        socket.on("connect_error", () => {
+            statusText.innerText = "Erro ao conectar ao servidor.";
+        });
+
+        // Recebimento de Eventos Remotos
         socket.on("RemoteEvent", (pkt) => {
-            if (pkt.type === "map_init_status") {
-                mapInitializing = pkt.data.initializing;
-                const progress = pkt.data.progress;
-                document.getElementById("progressBar").style.width = progress + "%";
-                document.getElementById("spawnBtn").disabled = mapInitializing;
-                
-                if (mapInitializing) {
-                    document.getElementById("menu").style.display = "none";
-                    document.getElementById("loadingScreen").style.display = "flex";
-                } else if (!inGame) {
-                    document.getElementById("loadingScreen").style.display = "none";
-                    document.getElementById("menu").style.display = "flex";
+            const { type, data } = pkt;
+
+            if (type === "map_progress") {
+                loadingOverlay.style.display = "block";
+                loadingText.innerText = `Criando mapa do servidor... (${data.progress}%)`;
+                loadingBar.style.width = `${data.progress}%`;
+                if (data.progress >= 100) {
+                    isMapReady = true;
+                    loadingOverlay.style.display = "none";
+                    statusText.innerText = "";
+                    spawnBtn.disabled = false;
+                    spawnBtn.classList.add("active");
+                }
+            } else if (type === "init_state") {
+                foodList = data.foodList || {};
+                players = data.players || {};
+            } else if (type === "food_spawn") {
+                foodList[data.id] = data;
+            } else if (type === "food_eaten") {
+                delete foodList[data.id];
+            } else if (type === "player_spawned") {
+                players[data.id] = data;
+            } else if (type === "player_updated") {
+                if (data.id !== socket.id) {
+                    if (!players[data.id]) {
+                        players[data.id] = data;
+                    } else {
+                        // Salva alvos para LERP linear
+                        players[data.id].targetX = data.x;
+                        players[data.id].targetY = data.y;
+                        players[data.id].targetAngle = data.angle;
+                        players[data.id].score = data.score;
+                        players[data.id].isSprinting = data.isSprinting;
+                        players[data.id].color = data.color;
+                        players[data.id].name = data.name;
+                    }
+                }
+            } else if (type === "player_died") {
+                if (players[data.id]) {
+                    players[data.id].fadingOut = true;
+                    players[data.id].fadeOutAlpha = 1.0;
+                    setTimeout(() => {
+                        delete players[data.id];
+                    }, 500);
+                }
+                if (data.id === socket.id && isAlive) {
+                    handleLocalDeath();
                 }
             }
-            if (pkt.type === "game_start") {
-                mapInitializing = false;
-                document.getElementById("loadingScreen").style.display = "none";
-                document.getElementById("menu").style.display = "none";
-                canvas.style.display = "block";
-                inGame = true;
-                initGameClient(pkt.data);
-            }
-            if (pkt.type === "sync_world") {
-                if (inGame) updateWorldState(pkt.data);
-            }
-            if (pkt.type === "player_died") {
-                if (pkt.data.id === myId) handleMyDeath();
-            }
         });
 
-        function requestSpawn() {
-            if (mapInitializing || isConnecting) return;
-            const name = document.getElementById("playerName").value || "Cobra";
-            socket.emit("RemoteEvent", { type: "spawn_request", data: { name, color: selectedColor } });
-        }
-
-        let myId = null;
-        let gameState = { players: {}, foods: [] };
-        let camera = { x: 0, y: 0 };
-        let myInput = { x: 0, y: 0, sprint: false };
-        let lastSprintTime = 0;
-
-        function initGameClient(data) {
-            myId = data.id;
-            gameState = data.state;
-        }
-
-        function updateWorldState(state) {
-            gameState = state;
-        }
-
-        function handleMyDeath() {
-            setTimeout(() => {
-                inGame = false;
-                canvas.style.display = "none";
-                document.getElementById("menu").style.display = "flex";
-            }, 2000);
-        }
-
+        // Controles teclado / mouse / touch
         window.addEventListener("keydown", (e) => {
-            if (!inGame) return;
-            if (e.code === "Space" || e.code === "KeyE") myInput.sprint = true;
+            keys[e.key.toLowerCase()] = true;
         });
         window.addEventListener("keyup", (e) => {
-            if (!inGame) return;
-            if (e.code === "Space" || e.code === "KeyE") myInput.sprint = false;
+            keys[e.key.toLowerCase()] = false;
         });
 
         window.addEventListener("mousemove", (e) => {
-            if (!inGame) return;
-            myInput.x = e.clientX - canvas.width / 2;
-            myInput.y = e.clientY - canvas.height / 2;
+            mousePos.x = e.clientX;
+            mousePos.y = e.clientY;
         });
 
-        window.addEventListener("touchmove", (e) => {
-            if (!inGame) return;
-            const touch = e.touches[0];
-            myInput.x = touch.clientX - canvas.width / 2;
-            myInput.y = touch.clientY - canvas.height / 2;
-            if (e.touches.length > 1) myInput.sprint = true;
-            else myInput.sprint = false;
-        });
-        window.addEventListener("touchend", (e) => {
-            if (e.touches.length <= 1) myInput.sprint = false;
+        canvas.addEventListener("touchstart", (e) => {
+            e.preventDefault();
+            if (e.touches.length >= 1) {
+                isTouching = true;
+                touchPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }
+            touchSecondFinger = e.touches.length >= 2;
+        }, { passive: false });
+
+        canvas.addEventListener("touchmove", (e) => {
+            e.preventDefault();
+            if (e.touches.length >= 1) {
+                touchPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }
+            touchSecondFinger = e.touches.length >= 2;
+        }, { passive: false });
+
+        canvas.addEventListener("touchend", (e) => {
+            e.preventDefault();
+            if (e.touches.length === 0) {
+                isTouching = false;
+                touchPos = null;
+            }
+            touchSecondFinger = e.touches.length >= 2;
+        }, { passive: false });
+
+        // Surgir no jogo
+        spawnBtn.addEventListener("click", () => {
+            if (!isMapReady || isAlive) return;
+
+            const name = playerNameInput.value.trim() || "Player";
+            const r = Math.round((redSlider.value / 100) * 255);
+            const g = Math.round((greenSlider.value / 100) * 255);
+            const b = Math.round((blueSlider.value / 100) * 255);
+            const color = `rgb(${r},${g},${b})`;
+
+            // Posição inicial aleatória evitando bordas
+            const margin = 200;
+            const spawnX = margin + Math.random() * (MAP_SIZE - margin * 2);
+            const spawnY = margin + Math.random() * (MAP_SIZE - margin * 2);
+
+            mySnake = {
+                x: spawnX,
+                y: spawnY,
+                angle: 0,
+                score: 5,
+                speed: 180,
+                isSprinting: false,
+                segments: Array(5).fill({ x: spawnX, y: spawnY }),
+                color: color,
+                name: name
+            };
+
+            isAlive = true;
+            isDeadCamera = false;
+            menuOverlay.style.display = "none";
+
+            socket.emit("RemoteEvent", {
+                type: "spawn",
+                data: {
+                    id: socket.id,
+                    x: spawnX,
+                    y: spawnY,
+                    angle: 0,
+                    score: 5,
+                    color: color,
+                    name: name
+                }
+            });
         });
 
+        // Morte do jogador local
+        function handleLocalDeath() {
+            isAlive = false;
+            isDeadCamera = true;
+            deadCameraPos = { x: mySnake.x, y: mySnake.y };
+
+            // Notifica servidor
+            socket.emit("RemoteEvent", {
+                type: "die",
+                data: { id: socket.id, x: mySnake.x, y: mySnake.y, score: mySnake.score }
+            });
+
+            // Após 2s, retorna ao menu principal sem refresh
+            setTimeout(() => {
+                isDeadCamera = false;
+                menuOverlay.style.display = "block";
+            }, 2000);
+        }
+
+        // Loop de Envio de Dados (30 req/s = ~33.3ms)
         setInterval(() => {
-            if (!inGame) return;
-            socket.emit("RemoteEvent", { type: "player_input", data: myInput });
+            if (!isAlive) return;
+
+            socket.emit("RemoteEvent", {
+                type: "update_position",
+                data: {
+                    id: socket.id,
+                    x: mySnake.x,
+                    y: mySnake.y,
+                    angle: mySnake.angle,
+                    score: mySnake.score,
+                    isSprinting: mySnake.isSprinting,
+                    color: mySnake.color,
+                    name: mySnake.name
+                }
+            });
         }, 1000 / 30);
 
-        function drawGrid(ox, oy) {
-            ctx.strokeStyle = "#222";
+        // Atualização de Lógica Local (60 FPS)
+        let lastTime = performance.now();
+
+        function updateGame(now) {
+            const dt = (now - lastTime) / 1000;
+            lastTime = now;
+
+            if (isAlive) {
+                // Cálculo de Direção (WASD/Setas, Cursor ou Dedo)
+                let targetAngle = mySnake.angle;
+
+                if (isTouching && touchPos) {
+                    const centerX = canvas.width / 2;
+                    const centerY = canvas.height / 2;
+                    targetAngle = Math.atan2(touchPos.y - centerY, touchPos.x - centerX);
+                } else {
+                    let dirX = 0;
+                    let dirY = 0;
+
+                    if (keys["w"] || keys["arrowup"]) dirY -= 1;
+                    if (keys["s"] || keys["arrowdown"]) dirY += 1;
+                    if (keys["a"] || keys["arrowleft"]) dirX -= 1;
+                    if (keys["d"] || keys["arrowright"]) dirX += 1;
+
+                    if (dirX !== 0 || dirY !== 0) {
+                        targetAngle = Math.atan2(dirY, dirX);
+                    } else {
+                        const centerX = canvas.width / 2;
+                        const centerY = canvas.height / 2;
+                        targetAngle = Math.atan2(mousePos.y - centerY, mousePos.x - centerX);
+                    }
+                }
+
+                mySnake.angle = targetAngle;
+
+                // Checagem de Sprint
+                const wantsSprint = keys[" "] || keys["e"] || touchSecondFinger;
+                if (wantsSprint && mySnake.score >= 6) {
+                    mySnake.isSprinting = true;
+
+                    // Consome 1 de comida a cada 0.3s
+                    if (now - lastSprintConsume >= 300) {
+                        mySnake.score -= 1;
+                        lastSprintConsume = now;
+                    }
+                } else {
+                    mySnake.isSprinting = false;
+                }
+
+                // Velocidade (+50% em sprint)
+                const currentSpeed = mySnake.isSprinting ? mySnake.speed * 1.5 : mySnake.speed;
+
+                // Atualizar posição da cabeça
+                mySnake.x += Math.cos(mySnake.angle) * currentSpeed * dt;
+                mySnake.y += Math.sin(mySnake.angle) * currentSpeed * dt;
+
+                // Colisão com a borda do mapa (vermelha e quadrada)
+                if (mySnake.x <= 0 || mySnake.x >= MAP_SIZE || mySnake.y <= 0 || mySnake.y >= MAP_SIZE) {
+                    handleLocalDeath();
+                    return;
+                }
+
+                // Atualizar segmentos da cobra
+                if (!mySnake.segments) mySnake.segments = [];
+                mySnake.segments.unshift({ x: mySnake.x, y: mySnake.y });
+
+                const targetSegmentCount = Math.floor(mySnake.score * 5);
+                while (mySnake.segments.length > targetSegmentCount) {
+                    mySnake.segments.pop();
+                }
+
+                // Colisão com Comidas
+                const headRadius = 10 + mySnake.score * 0.2;
+                for (let fid in foodList) {
+                    let f = foodList[fid];
+                    let dist = Math.hypot(mySnake.x - f.x, mySnake.y - f.y);
+                    if (dist < headRadius + (f.radius || 5)) {
+                        mySnake.score += 1;
+                        socket.emit("RemoteEvent", {
+                            type: "eat_food",
+                            data: { foodId: fid, playerX: mySnake.x, playerY: mySnake.y }
+                        });
+                        delete foodList[fid]; // Otimista local
+                    }
+                }
+            }
+
+            // LERP Linear para outros jogadores (Esconder latência)
+            for (let id in players) {
+                if (id === socket.id) continue;
+                let p = players[id];
+                if (p.targetX !== undefined && p.targetY !== undefined) {
+                    const lerpFactor = 0.2; // Suavização linear
+                    p.x += (p.targetX - p.x) * lerpFactor;
+                    p.y += (p.targetY - p.y) * lerpFactor;
+                    p.angle += (p.targetAngle - p.angle) * lerpFactor;
+
+                    if (!p.segments) p.segments = [];
+                    p.segments.unshift({ x: p.x, y: p.y });
+                    const targetCount = Math.floor((p.score || 5) * 5);
+                    while (p.segments.length > targetCount) {
+                        p.segments.pop();
+                    }
+                }
+
+                // Esmaecimento na morte (fade out 0.5s)
+                if (p.fadingOut) {
+                    p.fadeOutAlpha = Math.max(0, p.fadeOutAlpha - dt / 0.5);
+                }
+            }
+        }
+
+        // Renderização (Canvas 2D)
+        function drawGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Determinar Ponto de Visão (POV)
+            let cameraX = MAP_SIZE / 2;
+            let cameraY = MAP_SIZE / 2;
+
+            if (isAlive) {
+                cameraX = mySnake.x;
+                cameraY = mySnake.y;
+            } else if (isDeadCamera) {
+                cameraX = deadCameraPos.x;
+                cameraY = deadCameraPos.y;
+            }
+
+            ctx.save();
+            // Centraliza a câmera no Canvas
+            ctx.translate(canvas.width / 2 - cameraX, canvas.height / 2 - cameraY);
+
+            // 1. Renderizar Fundo e Grade Cinza (Sem basear jogo em grid)
+            ctx.fillStyle = "#000000";
+            ctx.fillRect(0, 0, MAP_SIZE, MAP_SIZE);
+
+            ctx.strokeStyle = "#222222";
             ctx.lineWidth = 1;
-            const gridSize = 50;
-            let startX = - (ox % gridSize);
-            let startY = - (oy % gridSize);
-            for (let x = startX; x < canvas.width; x += gridSize) {
-                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+            ctx.beginPath();
+            for (let x = 0; x <= MAP_SIZE; x += GRID_SIZE) {
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, MAP_SIZE);
             }
-            for (let y = startY; y < canvas.height; y += gridSize) {
-                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+            for (let y = 0; y <= MAP_SIZE; y += GRID_SIZE) {
+                ctx.moveTo(0, y);
+                ctx.lineTo(MAP_SIZE, y);
             }
+            ctx.stroke();
+
+            // 2. Borda Vermelha Quadrada
+            ctx.strokeStyle = "#ff0000";
+            ctx.lineWidth = 8;
+            ctx.strokeRect(0, 0, MAP_SIZE, MAP_SIZE);
+
+            // 3. Renderizar Comidas (Bolas)
+            for (let fid in foodList) {
+                let f = foodList[fid];
+                ctx.beginPath();
+                ctx.arc(f.x, f.y, f.radius || 6, 0, Math.PI * 2);
+                ctx.fillStyle = f.color || "#00ff88";
+                ctx.fill();
+                ctx.closePath();
+            }
+
+            // 4. Renderizar Outros Jogadores
+            for (let id in players) {
+                if (id === socket.id) continue;
+                drawSnake(players[id]);
+            }
+
+            // 5. Renderizar Cobra Local
+            if (isAlive) {
+                drawSnake(mySnake);
+            }
+
+            ctx.restore();
+
+            requestAnimationFrame((time) => {
+                updateGame(time);
+                drawGame();
+            });
         }
 
-        function render() {
-            if (inGame) {
-                ctx.fillStyle = "#000";
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Função auxiliar para desenhar uma cobra e seus olhos
+        function drawSnake(snake) {
+            if (!snake || !snake.segments || snake.segments.length === 0) return;
 
-                let me = gameState.players[myId];
-                if (me && me.body.length > 0) {
-                    camera.x = me.body[0].x - canvas.width / 2;
-                    camera.y = me.body[0].y - canvas.height / 2;
-                }
-
-                drawGrid(camera.x, camera.y);
-
-                ctx.strokeStyle = "#ff0000";
-                ctx.lineWidth = 5;
-                ctx.strokeRect(-camera.x, -camera.y, 5000, 5000);
-
-                if (gameState.foods) {
-                    for (let f of gameState.foods) {
-                        ctx.fillStyle = f.color;
-                        ctx.beginPath();
-                        ctx.arc(f.x - camera.x, f.y - camera.y, 4, 0, Math.PI * 2);
-                        ctx.fill();
-                    }
-                }
-
-                for (let id in gameState.players) {
-                    let p = gameState.players[id];
-                    if (!p.alive) continue;
-                    for (let seg of p.body) {
-                        ctx.fillStyle = p.color;
-                        ctx.beginPath();
-                        ctx.arc(seg.x - camera.x, seg.y - camera.y, 10, 0, Math.PI * 2);
-                        ctx.fill();
-                    }
-                    if (p.body.length > 0) {
-                        let head = p.body[0];
-                        ctx.fillStyle = "#fff";
-                        ctx.beginPath();
-                        ctx.arc(head.x - camera.x + 4, head.y - camera.y - 3, 3, 0, Math.PI * 2);
-                        ctx.arc(head.x - camera.x + 4, head.y - camera.y + 3, 3, 0, Math.PI * 2);
-                        ctx.fill();
-                    }
-                }
+            ctx.save();
+            if (snake.fadingOut) {
+                ctx.globalAlpha = snake.fadeOutAlpha !== undefined ? snake.fadeOutAlpha : 1.0;
             }
-            requestAnimationFrame(render);
+
+            const baseRadius = 10 + (snake.score || 5) * 0.2;
+
+            // Desenhar Corpo
+            ctx.fillStyle = snake.color || "#ffffff";
+            for (let i = snake.segments.length - 1; i >= 0; i -= 2) {
+                const seg = snake.segments[i];
+                ctx.beginPath();
+                ctx.arc(seg.x, seg.y, baseRadius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.closePath();
+            }
+
+            // Desenhar Cabeça e Olhos
+            const headX = snake.x || snake.segments[0].x;
+            const headY = snake.y || snake.segments[0].y;
+            const angle = snake.angle || 0;
+
+            ctx.beginPath();
+            ctx.arc(headX, headY, baseRadius, 0, Math.PI * 2);
+            ctx.fillStyle = snake.color || "#ffffff";
+            ctx.fill();
+            ctx.closePath();
+
+            // Olhos alinhados com a direção
+            const eyeOffsetAngle = 0.5;
+            const eyeDistance = baseRadius * 0.6;
+            const eyeRadius = Math.max(3, baseRadius * 0.3);
+            const pupilRadius = eyeRadius * 0.5;
+
+            for (let side of [-1, 1]) {
+                const eyeX = headX + Math.cos(angle + side * eyeOffsetAngle) * eyeDistance;
+                const eyeY = headY + Math.sin(angle + side * eyeOffsetAngle) * eyeDistance;
+
+                // Esclera (Branco)
+                ctx.fillStyle = "#ffffff";
+                ctx.beginPath();
+                ctx.arc(eyeX, eyeY, eyeRadius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Pupila (Olhando para frente)
+                const pupilX = eyeX + Math.cos(angle) * (eyeRadius - pupilRadius);
+                const pupilY = eyeY + Math.sin(angle) * (eyeRadius - pupilRadius);
+
+                ctx.fillStyle = "#000000";
+                ctx.beginPath();
+                ctx.arc(pupilX, pupilY, pupilRadius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Tag com Nome de Jogador
+            if (snake.name) {
+                ctx.font = "bold 12px sans-serif";
+                ctx.fillStyle = "#ffffff";
+                ctx.textAlign = "center";
+                ctx.fillText(snake.name, headX, headY - baseRadius - 8);
+            }
+
+            ctx.restore();
         }
-        requestAnimationFrame(render);
+
+        // Iniciar Loop
+        requestAnimationFrame((time) => {
+            lastTime = time;
+            drawGame();
+        });
     </script>
 </body>
 </html>
