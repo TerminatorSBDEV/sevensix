@@ -85,31 +85,41 @@
 
         let localPaddleY = 0.5;
 
-        // Conexão WebSocket via Socket.io
-        const socket = io(TUNNEL_URL, {
-            transports: ['websocket']
-        });
+// Conexão WebSocket via Socket.io
+const socket = io(TUNNEL_URL, {
+    transports: ['websocket']
+});
 
-        socket.on('connect', () => {
-            roleEl.innerText = "Conectado. Entrando na sala...";
-            socket.emit('join_virtual_server', { key: KEY });
-            socket.emit('RemoteEvent', { type: 'join_game', data: {} });
-        });
+socket.on('connect', () => {
+    roleEl.innerText = "Conectado. Autenticando...";
+    
+    // Autentica na sala virtual do EzBridge
+    socket.emit('join_virtual_server', { key: KEY });
+    
+    // Entra no jogo após autenticar
+    setTimeout(() => {
+        socket.emit('RemoteEvent', { type: 'join_game', data: {} });
+    }, 200);
+});
 
-        socket.on('player_assigned', (data) => {
-            myRole = data.role;
-            if (myRole === 'p1') roleEl.innerText = "Você é o Jogador 1 (Esquerda)";
-            else if (myRole === 'p2') roleEl.innerText = "Você é o Jogador 2 (Direita)";
-            else roleEl.innerText = "Você é um Espectador";
-        });
+// O EzBridge redireciona eventos do ServerScript como 'RemoteEvent' para os clientes
+socket.on('RemoteEvent', (packet) => {
+    if (!packet || !packet.type) return;
 
-        socket.on('state_update', (data) => {
-            serverState = data;
-            targetBall.x = data.ball.x;
-            targetBall.y = data.ball.y;
-            scoreEl.innerText = `${data.score.p1} - ${data.score.p2}`;
-        });
+    if (packet.type === 'player_assigned') {
+        myRole = packet.data.role;
+        if (myRole === 'p1') roleEl.innerText = "Você é o Jogador 1 (Esquerda)";
+        else if (myRole === 'p2') roleEl.innerText = "Você é o Jogador 2 (Direita)";
+        else roleEl.innerText = "Você é um Espectador";
+    }
 
+    if (packet.type === 'state_update') {
+        serverState = packet.data;
+        targetBall.x = packet.data.ball.x;
+        targetBall.y = packet.data.ball.y;
+        scoreEl.innerText = `${packet.data.score.p1} - ${packet.data.score.p2}`;
+    }
+});
         // Controles de entrada (Touch e Mouse/Teclado)
         function sendInput(yRatio) {
             if (myRole === 'spectator') return;
