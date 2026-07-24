@@ -41,16 +41,15 @@
         .shop-item button { width: 100%; padding: 6px; margin-top: 6px; background: #38bdf8; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; color: #0f172a; }
         .shop-item button:disabled { background: #475569; color: #94a3b8; cursor: not-allowed; }
 
-        /* Centered Progress Bar Modal (Uploading) */
+        /* Upload Progress Bar */
         #progress-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 260px; background: #0f172a; border: 2px solid #38bdf8; padding: 15px; border-radius: 8px; z-index: 30; display: none; text-align: center; }
         #progress-bar { width: 100%; height: 16px; background: #1e293b; border-radius: 8px; overflow: hidden; margin-top: 8px; }
         #progress-fill { width: 0%; height: 100%; background: #22c55e; transition: width 0.1s; }
 
-        /* Top Progress Bar (Late Joiner Download Audio) */
-        #top-dl-container { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 300px; background: rgba(15, 23, 42, 0.95); border: 1.5px solid #38bdf8; border-radius: 8px; padding: 8px 12px; z-index: 30; display: none; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        #top-dl-text { font-size: 0.8rem; font-weight: bold; color: #38bdf8; margin-bottom: 4px; }
-        #top-dl-bar { width: 100%; height: 10px; background: #1e293b; border-radius: 5px; overflow: hidden; }
-        #top-dl-fill { width: 0%; height: 100%; background: #38bdf8; transition: width 0.1s; }
+        /* Download Progress Bar (Late Joiners / On Demand) */
+        #download-ui { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 260px; background: rgba(15, 23, 42, 0.95); border: 2px solid #38bdf8; padding: 10px 15px; border-radius: 8px; z-index: 40; display: none; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+        #dl-bar-bg { width: 100%; height: 12px; background: #1e293b; border-radius: 6px; margin-top: 8px; overflow: hidden; }
+        #dl-bar-fill { width: 0%; height: 100%; background: #38bdf8; transition: width 0.1s; }
 
         #minimap-container { position: absolute; top: 10px; right: 10px; width: 150px; height: 150px; background: rgba(15, 23, 42, 0.8); border: 2px solid #475569; border-radius: 8px; overflow: hidden; pointer-events: none; z-index: 10; }
         #minimapCanvas { width: 100%; height: 100%; display: block; }
@@ -61,14 +60,14 @@
         HP: <span id="hp">100</span> | Points: <span id="pts">0</span> | Gun: <span id="wname">Rifle</span> | <span id="status">Connecting...</span>
     </div>
 
-    <!-- Top Downloading Progress Banner -->
-    <div id="top-dl-container">
-        <div id="top-dl-text">Downloading Audio (0%)...</div>
-        <div id="top-dl-bar"><div id="top-dl-fill"></div></div>
-    </div>
-
     <div id="top-btns">
         <button id="shop-btn-top" class="top-btn">Shop [H]</button>
+    </div>
+
+    <!-- Late Joiner / On Demand Download Progress -->
+    <div id="download-ui">
+        <div id="dl-text" style="font-size: 0.9rem; font-weight: bold;">Downloading Audio... 0%</div>
+        <div id="dl-bar-bg"><div id="dl-bar-fill"></div></div>
     </div>
 
     <div id="controls-hint">E: Wall | Y: Chat | H: Shop | 1-4: Select Weapon/Tool | WASD: Move | Right Click: Shoot/Use</div>
@@ -170,10 +169,11 @@
         let lastShot = 0;
         let lastBuild = 0;
         let aimAngle = 0;
-        let currentWeapon = 1;
+        let currentWeapon = 1; // 1: Rifle, 2: SMG, 3: Sniper, 4: Physics Gun
         let isMouseDown = false;
 
-        let physTarget = null;
+        // Physics Gun state
+        let physTarget = null; // { type: 'player'|'wall', id: string, wallIndex: number }
 
         const weaponStats = {
             1: { name: "Rifle", rate: 200 },
@@ -185,7 +185,7 @@
         const keys = { w: false, a: false, s: false, d: false };
         let players = {};
         let renderPlayers = {};
-        let bullets = {};
+        let bullets = {}; // Object with interpolation targets
         let renderBullets = {};
         let walls = [];
         let chatBubbles = {};
@@ -255,6 +255,7 @@
             }
         }
 
+        // Distance scale utility (0 to 1) max distance = 1200
         function getDistanceScale(x, y) {
             const dx = x - myPos.x;
             const dy = y - myPos.y;
@@ -262,12 +263,33 @@
             return Math.max(0, 1 - dist / 1200);
         }
 
-        // Audio Cache & Download Tracking
-        const audioCache = {}; // keyId: array of chunks
-        const audioExpectedChunks = {}; // keyId: totalChunks
-        const audioReady = {}; // keyId: boolean (download complete)
-        const pendingDeathSfx = {}; // keyId: { x, y } waiting for download to complete
-        const playingAudios = {}; 
+        // Audio Caching & Remote Audio Players
+        const audioCache = {}; // base64 / blob urls
+        const audioStatus = {}; // keyId -> 'downloading' | 'complete'
+        const pendingPlays = {}; // keyId -> { type, ... }
+        let activeDownloads = {}; // keyId -> { received, total }
+        const playingAudios = {}; // HTMLAudioElement or AudioContext sources
+
+        function updateDownloadUI() {
+            const ui = document.getElementById("download-ui");
+            const keys = Object.keys(activeDownloads);
+            if (keys.length === 0) {
+                ui.style.display = "none";
+                return;
+            }
+            
+            ui.style.display = "block";
+            let totalReceived = 0;
+            let totalExpected = 0;
+            keys.forEach(k => {
+                totalReceived += activeDownloads[k].received;
+                totalExpected += activeDownloads[k].total;
+            });
+            
+            const pct = totalExpected > 0 ? Math.round((totalReceived / totalExpected) * 100) : 0;
+            document.getElementById("dl-text").innerText = `Downloading Audio (${keys.length})... ${pct}%`;
+            document.getElementById("dl-bar-fill").style.width = `${pct}%`;
+        }
 
         function playRemoteAudio(keyId, srcUrl, x, y, loop = false, startOffset = 0) {
             if (playingAudios[keyId]) {
@@ -290,28 +312,6 @@
             }
         }
 
-        function updateTopDownloadUI() {
-            let totalNeeded = 0;
-            let totalReceived = 0;
-
-            for (let k in audioExpectedChunks) {
-                if (!audioReady[k]) {
-                    totalNeeded += audioExpectedChunks[k];
-                    totalReceived += (audioCache[k] ? audioCache[k].filter(Boolean).length : 0);
-                }
-            }
-
-            const topContainer = document.getElementById("top-dl-container");
-            if (totalNeeded > 0) {
-                const pct = Math.round((totalReceived / totalNeeded) * 100);
-                topContainer.style.display = "block";
-                document.getElementById("top-dl-text").innerText = `Downloading Audio (${pct}%)...`;
-                document.getElementById("top-dl-fill").style.width = `${pct}%`;
-            } else {
-                topContainer.style.display = "none";
-            }
-        }
-
         socket.on("connect", () => {
             socket.emit("join_virtual_server", { key });
         });
@@ -327,6 +327,7 @@
                 walls = pkt.data.walls || [];
                 const serverBullets = pkt.data.bullets || [];
 
+                // Match server bullets to local lerp bullet objects
                 bullets = {};
                 serverBullets.forEach(b => {
                     bullets[b.id] = b;
@@ -372,52 +373,80 @@
                 addChatMessage(pkt.data.id, pkt.data.text);
                 chatBubbles[pkt.data.id] = {
                     text: pkt.data.text,
-                    expireTime: Date.now() + 14000
+                    expireTime: Date.now() + 14000 // +10s duration = 14s
                 };
             } else if (pkt.type === "sfx") {
                 const scale = getDistanceScale(pkt.data.x, pkt.data.y);
                 playSfx(pkt.data.sfxType, scale);
+            } else if (pkt.type === "audio_download_meta") {
+                const { keyId, totalChunks } = pkt.data;
+                activeDownloads[keyId] = { received: 0, total: totalChunks };
+                updateDownloadUI();
             } else if (pkt.type === "audio_cache_chunk") {
                 const { keyId, chunk, chunkIndex, totalChunks } = pkt.data;
                 if (!audioCache[keyId]) audioCache[keyId] = [];
                 audioCache[keyId][chunkIndex] = chunk;
-                audioExpectedChunks[keyId] = totalChunks;
-
-                updateTopDownloadUI();
-
-                // Check if audio finished downloading
-                if (audioCache[keyId].filter(Boolean).length === totalChunks) {
-                    audioReady[keyId] = true;
-                    updateTopDownloadUI();
-
-                    // If a death audio was waiting to play, trigger it now
-                    if (pendingDeathSfx[keyId]) {
-                        const deathInfo = pendingDeathSfx[keyId];
-                        const fullData = audioCache[keyId].join('');
-                        playRemoteAudio(keyId, fullData, deathInfo.x, deathInfo.y, false);
-                        delete pendingDeathSfx[keyId];
+                
+                if (activeDownloads[keyId]) {
+                    // On-Demand targeted download chunks tracking
+                    activeDownloads[keyId].received++;
+                    updateDownloadUI();
+                    
+                    if (activeDownloads[keyId].received >= activeDownloads[keyId].total) {
+                        audioStatus[keyId] = 'complete';
+                        delete activeDownloads[keyId];
+                        updateDownloadUI();
+                        
+                        // Execute pending play queue
+                        if (pendingPlays[keyId]) {
+                            const p = pendingPlays[keyId];
+                            const fullData = audioCache[keyId].join('');
+                            if (p.type === 'death') {
+                                playRemoteAudio(keyId, fullData, p.x, p.y, false);
+                            } else if (p.type === 'radio') {
+                                const elapsed = (Date.now() - p.startTime) / 1000;
+                                playRemoteAudio(keyId, fullData, p.x, p.y, true, elapsed);
+                            }
+                            delete pendingPlays[keyId];
+                        }
+                    }
+                } else {
+                    // Live broadcast chunks tracking (someone is uploading right now)
+                    let count = 0;
+                    for (let i = 0; i < totalChunks; i++) {
+                        if (audioCache[keyId][i]) count++;
+                    }
+                    if (count >= totalChunks) {
+                        audioStatus[keyId] = 'complete';
                     }
                 }
             } else if (pkt.type === "play_death_sound") {
                 const { id, x, y } = pkt.data;
                 const keyId = `death_${id}`;
-
-                if (audioReady[keyId] && audioCache[keyId]) {
+                if (audioStatus[keyId] === 'complete') {
                     const fullData = audioCache[keyId].join('');
                     playRemoteAudio(keyId, fullData, x, y, false);
                 } else {
-                    // Not downloaded yet - save pending trigger and request download from server
-                    pendingDeathSfx[keyId] = { x, y };
-                    socket.emit("RemoteEvent", { type: "request_audio_download", data: { id: myId, keyId } });
+                    if (audioStatus[keyId] !== 'downloading') {
+                        audioStatus[keyId] = 'downloading';
+                        pendingPlays[keyId] = { type: 'death', x, y };
+                        socket.emit("RemoteEvent", { type: "request_audio_download", data: { id: myId, keyId } });
+                    }
                 }
             } else if (pkt.type === "radio_state") {
                 const { id, playing, x, y, startTime } = pkt.data;
                 const keyId = `radio_${id}`;
                 if (playing) {
-                    if (audioReady[keyId] && audioCache[keyId]) {
+                    if (audioStatus[keyId] === 'complete') {
                         const fullData = audioCache[keyId].join('');
                         const elapsed = (Date.now() - startTime) / 1000;
                         playRemoteAudio(keyId, fullData, x, y, true, elapsed);
+                    } else {
+                        if (audioStatus[keyId] !== 'downloading') {
+                            audioStatus[keyId] = 'downloading';
+                            pendingPlays[keyId] = { type: 'radio', x, y, startTime };
+                            socket.emit("RemoteEvent", { type: "request_audio_download", data: { id: myId, keyId } });
+                        }
                     }
                 } else {
                     stopRemoteAudio(keyId);
@@ -440,6 +469,7 @@
             return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
         }
 
+        // Shop UI Updates
         function updateShopUI() {
             const btnDeath = document.getElementById("btn-buy-death");
             if (myItems.deathSound) {
@@ -493,7 +523,7 @@
             }
         };
 
-        // Upload Handler: 100KB Chunks every 0.5s (500ms)
+        // File Chunk Upload Handler with Progress Bar (500ms ping delay per 100KB chunk)
         async function handleAudioUpload(file, category, maxBytes, maxDurationSec) {
             if (file.size > maxBytes) {
                 alert(`File too large! Max allowed: ${Math.round(maxBytes/1024/1024)}MB`);
@@ -513,10 +543,12 @@
                     const chunkSize = 100 * 1024; // 100KB chunks
                     const totalChunks = Math.ceil(base64Data.length / chunkSize);
 
+                    // Show progress GUI
                     const progressModal = document.getElementById("progress-container");
                     const progressFill = document.getElementById("progress-fill");
                     progressModal.style.display = "block";
 
+                    // Notify server validation
                     socket.emit("RemoteEvent", { 
                         type: "upload_start", 
                         data: { id: myId, category, size: file.size, duration: audioTemp.duration, totalChunks } 
@@ -532,7 +564,7 @@
                         const pct = Math.round(((i + 1) / totalChunks) * 100);
                         progressFill.style.width = `${pct}%`;
 
-                        // 0.5s (500ms) ping delay between chunks
+                        // 500ms ping interval per chunk broadcast
                         await new Promise(res => setTimeout(res, 500));
                     }
 
@@ -557,6 +589,7 @@
             socket.emit("RemoteEvent", { type: "toggle_radio", data: { id: myId, play: false } });
         };
 
+        // Inputs & Weapon Switching
         const chatInput = document.getElementById("chat-input");
         const chatContainer = document.getElementById("chat-container");
 
@@ -656,6 +689,7 @@
         });
         window.addEventListener("contextmenu", (e) => e.preventDefault());
 
+        // Joystick
         const joystickEl = document.getElementById("joystick");
         const stickEl = document.getElementById("stick");
         let joyCenter = { x: 0, y: 0 };
@@ -722,10 +756,12 @@
             socket.emit("RemoteEvent", { type: "build_wall", data: { id: myId, angle: aimAngle } });
         }
 
+        // Physics Gun Logic
         function startPhysGunDrag() {
             const worldMouseX = myPos.x + (mousePos.x - canvas.width / 2);
             const worldMouseY = myPos.y + (mousePos.y - canvas.height / 2);
 
+            // Check players
             for (let id in renderPlayers) {
                 if (id === myId || renderPlayers[id].hp <= 0) continue;
                 const p = renderPlayers[id];
@@ -734,6 +770,7 @@
                     return;
                 }
             }
+            // Check walls
             for (let i = 0; i < walls.length; i++) {
                 const w = walls[i];
                 if (Math.hypot(w.x - worldMouseX, w.y - worldMouseY) < 40) {
@@ -758,6 +795,7 @@
                     tryShoot();
                 }
 
+                // Dragging item with PhysGun
                 if (currentWeapon === 4 && isMouseDown && physTarget) {
                     const targetWorldX = myPos.x + (mousePos.x - screenCenterX);
                     const targetWorldY = myPos.y + (mousePos.y - screenCenterY);
@@ -776,6 +814,7 @@
                 }
             }
 
+            // Linear lerp bullet movement smoothly
             for (let bId in renderBullets) {
                 const rb = renderBullets[bId];
                 if (bullets[bId]) {
@@ -869,6 +908,7 @@
             ctx.lineWidth = 4;
             ctx.strokeRect(0, 0, 3000, 3000);
 
+            // Walls
             walls.forEach((w, index) => {
                 ctx.save();
                 ctx.translate(w.x, w.y);
@@ -888,6 +928,7 @@
                 ctx.restore();
             });
 
+            // Players
             for (let id in renderPlayers) {
                 let p = renderPlayers[id];
                 if (p.hp <= 0) continue;
@@ -895,6 +936,7 @@
                 ctx.save();
                 ctx.translate(p.x, p.y);
 
+                // Cyan outline if being dragged by physgun
                 if (physTarget && physTarget.type === 'player' && physTarget.id === id) {
                     ctx.strokeStyle = "#00ffff";
                     ctx.lineWidth = 4;
@@ -904,16 +946,19 @@
                 ctx.fillStyle = p.color || '#fff';
                 ctx.fillRect(-20, -20, 40, 40);
 
+                // Player ID text above head
                 ctx.font = "bold 12px sans-serif";
                 ctx.fillStyle = "#38bdf8";
                 ctx.textAlign = "center";
                 ctx.fillText(id, 0, -42);
 
+                // HP Bar
                 ctx.fillStyle = "#ef4444";
                 ctx.fillRect(-20, -32, 40, 5);
                 ctx.fillStyle = "#22c55e";
                 ctx.fillRect(-20, -32, 40 * (p.hp / 100), 5);
 
+                // Yellow Radio on Back if equipped
                 if (players[id] && players[id].items && players[id].items.radio) {
                     ctx.fillStyle = "#facc15";
                     ctx.fillRect(-8, 18, 16, 8);
@@ -921,19 +966,20 @@
 
                 ctx.rotate(p.angle);
                 
+                // Weapon models
                 const wType = p.weapon;
-                if (wType === 1) {
+                if (wType === 1) { // Rifle
                     ctx.fillStyle = "#64748b";
                     ctx.fillRect(5, -5, 34, 10);
-                } else if (wType === 2) {
+                } else if (wType === 2) { // SMG
                     ctx.fillStyle = "#475569";
                     ctx.fillRect(4, -4, 22, 8);
-                } else if (wType === 3) {
+                } else if (wType === 3) { // Sniper
                     ctx.fillStyle = "#334155";
                     ctx.fillRect(2, -4, 45, 8);
                     ctx.fillStyle = "#ef4444";
                     ctx.fillRect(15, -9, 10, 5);
-                } else if (wType === 4) {
+                } else if (wType === 4) { // Gmod Physics Gun
                     ctx.fillStyle = "#0284c7";
                     ctx.fillRect(2, -4, 30, 8);
                     ctx.fillStyle = "#00ffff";
@@ -942,6 +988,7 @@
 
                 ctx.restore();
 
+                // Sniper Laser
                 if (id === myId && currentWeapon === 3 && !isDead) {
                     ctx.save();
                     ctx.strokeStyle = "rgba(239, 68, 68, 0.7)";
@@ -954,11 +1001,13 @@
                     ctx.restore();
                 }
 
+                // Chat bubbles
                 if (chatBubbles[id] && chatBubbles[id].expireTime > Date.now()) {
                     drawBubble(p.x, p.y, chatBubbles[id].text);
                 }
             }
 
+            // Lerped Bullets
             ctx.fillStyle = "#facc15";
             for (let bId in renderBullets) {
                 const b = renderBullets[bId];
