@@ -260,7 +260,6 @@
             socket.emit("RemoteEvent", { type: "build_wall", data: { id: myId, angle: aimAngle } });
         }
 
-        // Throttle input networking to exactly 50 requests per second (20ms)
         let lastInputEmit = 0;
         function update() {
             if (!isDead && !chatOpen) {
@@ -316,7 +315,6 @@
             mCtx.lineWidth = 1;
             mCtx.strokeRect(0, 0, 150, 150);
 
-            // Draw walls on minimap
             mCtx.fillStyle = "#64748b";
             walls.forEach(w => {
                 mCtx.fillRect(w.x * scale - 1, w.y * scale - 1, 2, 2);
@@ -344,7 +342,6 @@
                 if (!renderPlayers[id]) {
                     renderPlayers[id] = { x: sp.x, y: sp.y, angle: sp.angle, color: sp.color, hp: sp.hp };
                 } else {
-                    // Strict linear interpolation
                     renderPlayers[id].x += (sp.x - renderPlayers[id].x) * 0.3;
                     renderPlayers[id].y += (sp.y - renderPlayers[id].y) * 0.3;
                     renderPlayers[id].angle = sp.angle;
@@ -362,16 +359,16 @@
             ctx.lineWidth = 4;
             ctx.strokeRect(0, 0, 3000, 3000);
 
-            // Draw Walls
+            // Draw Walls (Longer length: 120 width, vertical orientation relative to look direction -> rotated + 90 deg)
             walls.forEach(w => {
                 ctx.save();
                 ctx.translate(w.x, w.y);
-                ctx.rotate(w.angle);
+                ctx.rotate(w.angle + Math.PI / 2);
                 ctx.fillStyle = "#334155";
                 ctx.strokeStyle = "#94a3b8";
                 ctx.lineWidth = 2;
-                ctx.fillRect(-35, -10, 70, 20);
-                ctx.strokeRect(-35, -10, 70, 20);
+                ctx.fillRect(-60, -10, 120, 20);
+                ctx.strokeRect(-60, -10, 120, 20);
                 ctx.restore();
             });
 
