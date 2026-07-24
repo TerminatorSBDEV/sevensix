@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Random Number Generator (HTTP)</title>
+    <title>Random Number Generator</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         body { margin: 0; background: #0f172a; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; user-select: none; }
         button { padding: 15px 30px; font-size: 1.5rem; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; touch-action: manipulation; }
@@ -13,28 +14,28 @@
 <body>
     <button id="generateBtn">Generate Number</button>
     <div id="result">-</div>
-    <div id="status">Ready</div>
+    <div id="status">Connecting...</div>
 
     <script>
-        const link = "https://anyway-accessory-initiated-creating.trycloudflare.com/remote";
+        const link = "https://anyway-accessory-initiated-creating.trycloudflare.com";
         const key = "146cf8ce56";
+        const socket = io(link, { auth: { token: "default_key" } });
 
-        document.getElementById("generateBtn").addEventListener("click", async () => {
-            document.getElementById("status").innerText = "Generating...";
-            try {
-                const response = await fetch(link, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json", "auth-token": key },
-                    body: JSON.stringify({ type: "request_number" })
-                });
-                
-                const result = await response.json();
-                if (result && result.number) {
-                    document.getElementById("result").innerText = result.number;
-                    document.getElementById("status").innerText = "Ready";
-                }
-            } catch (err) {
-                document.getElementById("status").innerText = "Error connecting to server";
+        socket.on("connect", () => {
+            socket.emit("join_virtual_server", { key });
+        });
+
+        socket.on("joined_successfully", () => {
+            document.getElementById("status").innerText = "Connected";
+        });
+
+        document.getElementById("generateBtn").addEventListener("click", () => {
+            socket.emit("RemoteEvent", { type: "request_number" });
+        });
+
+        socket.on("RemoteEvent", (pkt) => {
+            if (pkt.type === "number_result") {
+                document.getElementById("result").innerText = pkt.data.number;
             }
         });
     </script>
