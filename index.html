@@ -19,7 +19,6 @@
         
         #action-btns { position: absolute; bottom: 40px; right: 40px; display: flex; gap: 10px; z-index: 10; }
         .action-btn { width: 55px; height: 55px; background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.4); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; cursor: pointer; color: #fff; }
-        .action-btn.active { background: #22c55e; border-color: #4ade80; }
         
         .mob-weapon-btn { position: absolute; bottom: 105px; width: 50px; height: 50px; background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.3); border-radius: 12px; display: none; align-items: center; justify-content: center; font-weight: bold; font-size: 0.9rem; cursor: pointer; z-index: 10; color: #fff; }
         #mob-w1 { right: 40px; }
@@ -60,7 +59,7 @@
         <button id="shop-btn-top" class="top-btn">Shop [H]</button>
     </div>
 
-    <div id="controls-hint">E: Wall | Y: Chat | M: Mic | H: Shop | 1-4: Select Weapon/Tool | WASD: Move | Right Click: Shoot/Use</div>
+    <div id="controls-hint">E: Wall | Y: Chat | H: Shop | 1-4: Select Weapon/Tool | WASD: Move | Right Click: Shoot/Use</div>
     
     <div id="chat-box">
         <div id="chat-messages"></div>
@@ -72,7 +71,6 @@
     <div id="joystick"><div id="stick"></div></div>
     
     <div id="action-btns">
-        <div id="mic-btn" class="action-btn">🎙️</div>
         <div id="chat-btn" class="action-btn">💬</div>
         <div id="build-btn" class="action-btn">🧱</div>
     </div>
@@ -162,7 +160,6 @@
         let aimAngle = 0;
         let currentWeapon = 1; // 1: Rifle, 2: SMG, 3: Sniper, 4: Physics Gun
         let isMouseDown = false;
-        let isMicActive = false;
 
         // Physics Gun state
         let physTarget = null; // { type: 'player'|'wall', id: string, wallIndex: number }
@@ -346,13 +343,6 @@
             } else if (pkt.type === "sfx") {
                 const scale = getDistanceScale(pkt.data.x, pkt.data.y);
                 playSfx(pkt.data.sfxType, scale);
-            } else if (pkt.type === "voice_chunk") {
-                if (pkt.data.id !== myId) {
-                    const scale = getDistanceScale(pkt.data.x, pkt.data.y);
-                    if (scale > 0) {
-                        playVoiceChunk(pkt.data.chunk, scale);
-                    }
-                }
             } else if (pkt.type === "audio_cache_chunk") {
                 const { keyId, chunk, chunkIndex, totalChunks } = pkt.data;
                 if (!audioCache[keyId]) audioCache[keyId] = [];
@@ -390,46 +380,6 @@
 
         function escapeHtml(str) {
             return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        }
-
-        // Voice Chat Setup (Web Audio API Stream Processor)
-        let mediaRecorder = null;
-        async function setupVoice() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-                mediaRecorder.ondataavailable = async (e) => {
-                    if (e.data.size > 0 && isMicActive) {
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                            const base64 = reader.result;
-                            socket.emit("RemoteEvent", { type: "voice_chunk", data: { id: myId, chunk: base64, x: myPos.x, y: myPos.y } });
-                        };
-                        reader.readAsDataURL(e.data);
-                    }
-                };
-            } catch(err) {
-                console.log("Mic access denied/unavailable");
-            }
-        }
-        setupVoice();
-
-        function toggleMic() {
-            isMicActive = !isMicActive;
-            const micBtn = document.getElementById("mic-btn");
-            if (isMicActive) {
-                micBtn.classList.add("active");
-                if (mediaRecorder && mediaRecorder.state === "inactive") mediaRecorder.start(250);
-            } else {
-                micBtn.classList.remove("active");
-                if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop();
-            }
-        }
-
-        function playVoiceChunk(base64Chunk, volume) {
-            const audio = new Audio(base64Chunk);
-            audio.volume = Math.min(1, volume);
-            audio.play().catch(() => {});
         }
 
         // Shop UI Updates
@@ -486,7 +436,7 @@
             }
         };
 
-        // File Chunk Upload Handler with Progress Bar & DDoS Safety Throttle
+        // File Chunk Upload Handler with Progress Bar (1000ms ping delay per chunk)
         async function handleAudioUpload(file, category, maxBytes, maxDurationSec) {
             if (file.size > maxBytes) {
                 alert(`File too large! Max allowed: ${Math.round(maxBytes/1024/1024)}MB`);
@@ -527,8 +477,8 @@
                         const pct = Math.round(((i + 1) / totalChunks) * 100);
                         progressFill.style.width = `${pct}%`;
 
-                        // Safety delay to prevent >250 req/sec trigger
-                        await new Promise(res => setTimeout(res, 25));
+                        // Exactly 1s (1000ms) ping interval per chunk broadcast
+                        await new Promise(res => setTimeout(res, 1000));
                     }
 
                     setTimeout(() => { progressModal.style.display = "none"; }, 300);
@@ -582,8 +532,6 @@
                 sendChat();
             } else if (e.key.toLowerCase() === 'e' && !chatOpen && !isDead) {
                 buildWall();
-            } else if (e.key.toLowerCase() === 'm' && !chatOpen) {
-                toggleMic();
             } else if (e.key.toLowerCase() === 'h' && !chatOpen) {
                 const modal = document.getElementById("shop-modal");
                 modal.style.display = modal.style.display === "block" ? "none" : "block";
@@ -615,7 +563,6 @@
         });
 
         document.getElementById("chat-btn").onclick = toggleChat;
-        document.getElementById("mic-btn").onclick = toggleMic;
         document.getElementById("build-btn").onclick = () => { if (!isDead && !chatOpen) buildWall(); };
 
         document.getElementById("mob-w1").onclick = () => setWeapon(1);
@@ -774,7 +721,7 @@
                 let inputData = isMobile ? { vector: joyVector } : { w: keys.w, a: keys.a, s: keys.s, d: keys.d };
 
                 const now = Date.now();
-                if (now - lastInputEmit >= 1000 / 50) { // strictly throttled to 50 requests/sec
+                if (now - lastInputEmit >= 1000 / 50) {
                     lastInputEmit = now;
                     socket.emit("RemoteEvent", { type: "player_input", data: { id: myId, input: inputData, angle: aimAngle, color: myColor, weapon: currentWeapon } });
                 }
@@ -784,7 +731,6 @@
             for (let bId in renderBullets) {
                 const rb = renderBullets[bId];
                 if (bullets[bId]) {
-                    // Linear lerp towards updated server target coordinates
                     rb.x += (bullets[bId].x - rb.x) * 0.35;
                     rb.y += (bullets[bId].y - rb.y) * 0.35;
                 } else {
@@ -950,7 +896,7 @@
                     ctx.fillStyle = "#0284c7";
                     ctx.fillRect(2, -4, 30, 8);
                     ctx.fillStyle = "#00ffff";
-                    ctx.fillRect(28, -7, 8, 14); // Cyan prongs
+                    ctx.fillRect(28, -7, 8, 14);
                 }
 
                 ctx.restore();
@@ -968,7 +914,7 @@
                     ctx.restore();
                 }
 
-                // Chat bubbles (+10s duration)
+                // Chat bubbles
                 if (chatBubbles[id] && chatBubbles[id].expireTime > Date.now()) {
                     drawBubble(p.x, p.y, chatBubbles[id].text);
                 }
