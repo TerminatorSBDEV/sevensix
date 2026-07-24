@@ -1,290 +1,42 @@
-<!-- Test Your Guns - Client Script -->
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Test Your Guns</title>
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <title>Random Number Generator (HTTP)</title>
     <style>
-        body { margin: 0; background: #0f172a; color: #fff; font-family: sans-serif; overflow: hidden; user-select: none; }
-        canvas { display: block; background: #1e293b; }
-        #ui { position: absolute; top: 10px; left: 10px; pointer-events: none; font-weight: bold; font-size: 1.2rem; text-shadow: 1px 1px 2px #000; }
-        #joystick { position: absolute; bottom: 40px; left: 40px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; display: none; touch-action: none; }
-        #stick { position: absolute; top: 35px; left: 35px; width: 50px; height: 50px; background: rgba(255,255,255,0.4); border-radius: 50%; pointer-events: none; }
+        body { margin: 0; background: #0f172a; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; user-select: none; }
+        button { padding: 15px 30px; font-size: 1.5rem; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; touch-action: manipulation; }
+        button:active { background: #2563eb; }
+        #result { margin-top: 20px; font-size: 2rem; font-weight: bold; }
+        #status { margin-top: 10px; color: #94a3b8; }
     </style>
 </head>
 <body>
-    <div id="ui">Health: <span id="hp">100</span> | Status: <span id="status">Connecting...</span></div>
-    <div id="joystick"><div id="stick"></div></div>
-    <canvas id="gameCanvas"></canvas>
+    <button id="generateBtn">Generate Number</button>
+    <div id="result">-</div>
+    <div id="status">Ready</div>
 
     <script>
-        const canvas = document.getElementById("gameCanvas");
-        const ctx = canvas.getContext("2d");
-
-        function resize() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        }
-        window.addEventListener("resize", resize);
-        resize();
-
-        const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-        if (isMobile) {
-            document.getElementById("joystick").style.display = "block";
-        }
-
-        const link = "https://anyway-accessory-initiated-creating.trycloudflare.com";
+        const link = "https://anyway-accessory-initiated-creating.trycloudflare.com/remote";
         const key = "146cf8ce56";
-        const socket = io(link, { auth: { token: "default_key" } });
 
-        let myId = Math.random().toString(36).substring(2, 7);
-        let myColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
-        let myPos = { x: Math.random() * 1500, y: Math.random() * 1500 };
-        let myHp = 100;
-        let isDead = false;
-        let lastShot = 0;
-        let aimAngle = 0;
-
-        const keys = { w: false, a: false, s: false, d: false };
-        let players = {};
-        let bullets = [];
-
-        let joyActive = false;
-        let joyVector = { x: 0, y: 0 };
-
-        socket.on("connect", () => {
-            socket.emit("join_virtual_server", { key });
-        });
-
-        socket.on("joined_successfully", () => {
-            document.getElementById("status").innerText = "Connected";
-            socket.emit("RemoteEvent", { type: "player_join", data: { id: myId, color: myColor, x: myPos.x, y: myPos.y } });
-        });
-
-        socket.on("RemoteEvent", (pkt) => {
-            if (pkt.type === "state_update") {
-                const serverPlayers = pkt.data.players;
-                for (let id in serverPlayers) {
-                    if (id === myId) {
-                        myHp = serverPlayers[id].hp;
-                        document.getElementById("hp").innerText = myHp;
-                        if (myHp <= 0 && !isDead) {
-                            isDead = true;
-                            setTimeout(() => {
-                                isDead = false;
-                                myPos = { x: Math.random() * 1500, y: Math.random() * 1500 };
-                                socket.emit("RemoteEvent", { type: "respawn", data: { id: myId, x: myPos.x, y: myPos.y } });
-                            }, 3000);
-                        }
-                    } else {
-                        players[id] = serverPlayers[id];
-                    }
+        document.getElementById("generateBtn").addEventListener("click", async () => {
+            document.getElementById("status").innerText = "Generating...";
+            try {
+                const response = await fetch(link, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "auth-token": key },
+                    body: JSON.stringify({ type: "request_number" })
+                });
+                
+                const result = await response.json();
+                if (result && result.number) {
+                    document.getElementById("result").innerText = result.number;
+                    document.getElementById("status").innerText = "Ready";
                 }
-            } else if (pkt.type === "spawn_bullet") {
-                if (pkt.data.shooterId !== myId) {
-                    bullets.push(pkt.data);
-                }
+            } catch (err) {
+                document.getElementById("status").innerText = "Error connecting to server";
             }
         });
-
-        window.addEventListener("keydown", (e) => {
-            if (e.key.toLowerCase() === 'w') keys.w = true;
-            if (e.key.toLowerCase() === 'a') keys.a = true;
-            if (e.key.toLowerCase() === 's') keys.s = true;
-            if (e.key.toLowerCase() === 'd') keys.d = true;
-        });
-
-        window.addEventListener("keyup", (e) => {
-            if (e.key.toLowerCase() === 'w') keys.w = false;
-            if (e.key.toLowerCase() === 'a') keys.a = false;
-            if (e.key.toLowerCase() === 's') keys.s = false;
-            if (e.key.toLowerCase() === 'd') keys.d = false;
-        });
-
-        let mousePos = { x: canvas.width / 2, y: canvas.height / 2 };
-        window.addEventListener("mousemove", (e) => {
-            mousePos.x = e.clientX;
-            mousePos.y = e.clientY;
-        });
-
-        window.addEventListener("mousedown", (e) => {
-            if (e.button === 2 && !isDead) {
-                shoot();
-            }
-        });
-        window.addEventListener("contextmenu", (e) => e.preventDefault());
-
-        const joystickEl = document.getElementById("joystick");
-        const stickEl = document.getElementById("stick");
-        let joyCenter = { x: 0, y: 0 };
-
-        joystickEl.addEventListener("touchstart", (e) => {
-            joyActive = true;
-            const rect = joystickEl.getBoundingClientRect();
-            joyCenter = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-        });
-
-        window.addEventListener("touchmove", (e) => {
-            if (!joyActive) return;
-            const touch = e.touches[0];
-            const dx = touch.clientX - joyCenter.x;
-            const dy = touch.clientY - joyCenter.y;
-            const dist = Math.min(50, Math.hypot(dx, dy));
-            const angle = Math.atan2(dy, dx);
-
-            joyVector.x = Math.cos(angle) * (dist / 50);
-            joyVector.y = Math.sin(angle) * (dist / 50);
-
-            stickEl.style.transform = `translate(${Math.cos(angle)*dist}px, ${Math.sin(angle)*dist}px)`;
-        });
-
-        window.addEventListener("touchend", (e) => {
-            if (joyActive) {
-                joyActive = false;
-                joyVector = { x: 0, y: 0 };
-                stickEl.style.transform = `translate(0px, 0px)`;
-            }
-        });
-
-        window.addEventListener("touchstart", (e) => {
-            if (isDead) return;
-            const touch = e.touches[0];
-            if (touch.clientX > 180 || touch.clientY < canvas.height - 180) {
-                mousePos.x = touch.clientX;
-                mousePos.y = touch.clientY;
-                shoot();
-            }
-        });
-
-        function shoot() {
-            const now = Date.now();
-            if (now - lastShot < 200) return;
-            lastShot = now;
-
-            const bullet = {
-                x: myPos.x,
-                y: myPos.y,
-                vx: Math.cos(aimAngle) * 12,
-                vy: Math.sin(aimAngle) * 12,
-                damage: 13,
-                shooterId: myId
-            };
-
-            bullets.push(bullet);
-            socket.emit("RemoteEvent", { type: "fire_bullet", data: bullet });
-        }
-
-        function update() {
-            if (!isDead) {
-                let speed = 4;
-                if (isMobile) {
-                    myPos.x += joyVector.x * speed;
-                    myPos.y += joyVector.y * speed;
-                } else {
-                    if (keys.w) myPos.y -= speed;
-                    if (keys.s) myPos.y += speed;
-                    if (keys.a) myPos.x -= speed;
-                    if (keys.d) myPos.x += speed;
-                }
-
-                myPos.x = Math.max(0, Math.min(3000, myPos.x));
-                myPos.y = Math.max(0, Math.min(3000, myPos.y));
-
-                const screenCenterX = canvas.width / 2;
-                const screenCenterY = canvas.height / 2;
-                aimAngle = Math.atan2(mousePos.y - screenCenterY, mousePos.x - screenCenterX);
-
-                socket.emit("RemoteEvent", { type: "player_update", data: { id: myId, x: myPos.x, y: myPos.y, angle: aimAngle, color: myColor } });
-            }
-
-            for (let i = bullets.length - 1; i >= 0; i--) {
-                let b = bullets[i];
-                b.x += b.vx;
-                b.y += b.vy;
-
-                if (b.x < 0 || b.x > 3000 || b.y < 0 || b.y > 3000) {
-                    bullets.splice(i, 1);
-                    continue;
-                }
-
-                if (b.shooterId === myId) {
-                    for (let id in players) {
-                        let p = players[id];
-                        if (p.hp > 0 && Math.abs(p.x - b.x) < 25 && Math.abs(p.y - b.y) < 25) {
-                            socket.emit("RemoteEvent", { type: "apply_damage", data: { targetId: id, damage: b.damage } });
-                            bullets.splice(i, 1);
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            ctx.save();
-            if (!isDead) {
-                ctx.translate(canvas.width / 2 - myPos.x, canvas.height / 2 - myPos.y);
-            }
-
-            ctx.strokeStyle = "#475569";
-            ctx.lineWidth = 4;
-            ctx.strokeRect(0, 0, 3000, 3000);
-
-            if (!isDead) {
-                ctx.save();
-                ctx.translate(myPos.x, myPos.y);
-                ctx.fillStyle = myColor;
-                ctx.fillRect(-20, -20, 40, 40);
-
-                ctx.fillStyle = "#ef4444";
-                ctx.fillRect(-20, -32, 40, 6);
-                ctx.fillStyle = "#22c55e";
-                ctx.fillRect(-20, -32, 40 * (myHp / 100), 6);
-
-                ctx.rotate(aimAngle);
-                ctx.fillStyle = "#94a3b8";
-                ctx.fillRect(0, -6, 30, 12);
-                ctx.restore();
-            }
-
-            for (let id in players) {
-                let p = players[id];
-                if (p.hp <= 0) continue;
-
-                ctx.save();
-                ctx.translate(p.x, p.y);
-                ctx.fillStyle = p.color || '#fff';
-                ctx.fillRect(-20, -20, 40, 40);
-
-                ctx.fillStyle = "#ef4444";
-                ctx.fillRect(-20, -32, 40, 6);
-                ctx.fillStyle = "#22c55e";
-                ctx.fillRect(-20, -32, 40 * (p.hp / 100), 6);
-
-                ctx.rotate(p.angle);
-                ctx.fillStyle = "#94a3b8";
-                ctx.fillRect(0, -6, 30, 12);
-                ctx.restore();
-            }
-
-            ctx.fillStyle = "#facc15";
-            bullets.forEach(b => {
-                ctx.beginPath();
-                ctx.arc(b.x, b.y, 4, 0, Math.PI * 2);
-                ctx.fill();
-            });
-
-            ctx.restore();
-        }
-
-        function loop() {
-            update();
-            draw();
-            requestAnimationFrame(loop);
-        }
-        loop();
     </script>
 </body>
 </html>
