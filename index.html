@@ -1,8 +1,9 @@
-<!-- Test Your Guns - Complete HTTP Client Script -->
+<!-- Test Your Guns - Client Script -->
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Test Your Guns (HTTP)</title>
+    <title>Test Your Guns</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         body { margin: 0; background: #0f172a; color: #fff; font-family: sans-serif; overflow: hidden; user-select: none; }
         canvas { display: block; background: #1e293b; }
@@ -12,7 +13,7 @@
     </style>
 </head>
 <body>
-    <div id="ui">Health: <span id="hp">100</span> | Mode: <span id="status">HTTP REST</span></div>
+    <div id="ui">Health: <span id="hp">100</span> | Status: <span id="status">Connecting...</span></div>
     <div id="joystick"><div id="stick"></div></div>
     <canvas id="gameCanvas"></canvas>
 
@@ -32,8 +33,9 @@
             document.getElementById("joystick").style.display = "block";
         }
 
-        const link = "https://interim-preference-audience-duties.trycloudflare.com/remote";
+        const link = "https://interim-preference-audience-duties.trycloudflare.com";
         const key = "146cf8ce56";
+        const socket = io(link, { auth: { token: "default_key" } });
 
         let myId = Math.random().toString(36).substring(2, 7);
         let myColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
@@ -50,34 +52,16 @@
         let joyActive = false;
         let joyVector = { x: 0, y: 0 };
 
-        // HTTP Sync Loop: Envias ações por POST e recebe os eventos de resposta do ServerScript
-        let isHttpBusy = false;
-        async function syncHttp(eventType, customData) {
-            if (isHttpBusy && !customData) return;
-            isHttpBusy = true;
-            try {
-                const payload = customData ? { type: eventType, data: customData } : {
-                    type: "player_update",
-                    data: { id: myId, x: myPos.x, y: myPos.y, angle: aimAngle, color: myColor }
-                };
+        socket.on("connect", () => {
+            socket.emit("join_virtual_server", { key });
+        });
 
-                const res = await fetch(link, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json", "auth-token": key },
-                    body: JSON.stringify(payload)
-                });
+        socket.on("joined_successfully", () => {
+            document.getElementById("status").innerText = "Connected";
+            socket.emit("RemoteEvent", { type: "player_join", data: { id: myId, color: myColor, x: myPos.x, y: myPos.y } });
+        });
 
-                if (res.ok) {
-                    const json = await res.json();
-                    if (json.events && Array.isArray(json.events)) {
-                        json.events.forEach(handleServerEvent);
-                    }
-                }
-            } catch(e) {}
-            isHttpBusy = false;
-        }
-
-        function handleServerEvent(pkt) {
+        socket.on("RemoteEvent", (pkt) => {
             if (pkt.type === "state_update") {
                 const serverPlayers = pkt.data.players;
                 for (let id in serverPlayers) {
@@ -89,7 +73,7 @@
                             setTimeout(() => {
                                 isDead = false;
                                 myPos = { x: Math.random() * 1500, y: Math.random() * 1500 };
-                                syncHttp("respawn", { id: myId, x: myPos.x, y: myPos.y });
+                                socket.emit("RemoteEvent", { type: "respawn", data: { id: myId, x: myPos.x, y: myPos.y } });
                             }, 3000);
                         }
                     } else {
@@ -101,15 +85,7 @@
                     bullets.push(pkt.data);
                 }
             }
-        }
-
-        // Registro inicial via HTTP
-        syncHttp("player_join", { id: myId, color: myColor, x: myPos.x, y: myPos.y });
-
-        // Polling contínuo HTTP a cada 60ms
-        setInterval(() => {
-            if (!isDead) syncHttp();
-        }, 60);
+        });
 
         window.addEventListener("keydown", (e) => {
             if (e.key.toLowerCase() === 'w') keys.w = true;
@@ -195,7 +171,7 @@
             };
 
             bullets.push(bullet);
-            syncHttp("fire_bullet", bullet);
+            socket.emit("RemoteEvent", { type: "fire_bullet", data: bullet });
         }
 
         function update() {
@@ -217,6 +193,8 @@
                 const screenCenterX = canvas.width / 2;
                 const screenCenterY = canvas.height / 2;
                 aimAngle = Math.atan2(mousePos.y - screenCenterY, mousePos.x - screenCenterX);
+
+                socket.emit("RemoteEvent", { type: "player_update", data: { id: myId, x: myPos.x, y: myPos.y, angle: aimAngle, color: myColor } });
             }
 
             for (let i = bullets.length - 1; i >= 0; i--) {
@@ -233,7 +211,7 @@
                     for (let id in players) {
                         let p = players[id];
                         if (p.hp > 0 && Math.abs(p.x - b.x) < 25 && Math.abs(p.y - b.y) < 25) {
-                            syncHttp("apply_damage", { targetId: id, damage: b.damage });
+                            socket.emit("RemoteEvent", { type: "apply_damage", data: { targetId: id, damage: b.damage } });
                             bullets.splice(i, 1);
                             break;
                         }
