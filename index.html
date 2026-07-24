@@ -47,7 +47,7 @@
 
         let myId = Math.random().toString(36).substring(2, 7);
         let myColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
-        let myPos = { x: 1500, y: 1500 };
+        let myPos = { x: Math.random() * 1500, y: Math.random() * 1500 };
         let myHp = 100;
         let isDead = false;
         let lastShot = 0;
@@ -55,6 +55,7 @@
 
         const keys = { w: false, a: false, s: false, d: false };
         let players = {};
+        let renderPlayers = {}; // Interpolated positions for smooth rendering
         let bullets = [];
         let chatBubbles = {};
 
@@ -68,7 +69,7 @@
 
         socket.on("joined_successfully", () => {
             document.getElementById("status").innerText = "Connected";
-            socket.emit("RemoteEvent", { type: "player_join", data: { id: myId, color: myColor } });
+            socket.emit("RemoteEvent", { type: "player_join", data: { id: myId, color: myColor, x: myPos.x, y: myPos.y } });
         });
 
         socket.on("RemoteEvent", (pkt) => {
@@ -77,14 +78,12 @@
                 bullets = pkt.data.bullets || [];
 
                 for (let id in serverPlayers) {
-                    let serverP = serverPlayers[id];
+                    const sp = serverPlayers[id];
                     if (id === myId) {
-                        myHp = serverP.hp;
+                        myHp = sp.hp;
+                        myPos.x = sp.x;
+                        myPos.y = sp.y;
                         document.getElementById("hp").innerText = myHp;
-                        // Lerp local position towards server-calculated position for smooth correction
-                        myPos.x += (serverP.x - myPos.x) * 0.2;
-                        myPos.y += (serverP.y - myPos.y) * 0.2;
-
                         if (myHp <= 0 && !isDead) {
                             isDead = true;
                             setTimeout(() => {
@@ -92,23 +91,12 @@
                                 socket.emit("RemoteEvent", { type: "respawn", data: { id: myId } });
                             }, 3000);
                         }
-                    } else {
-                        if (!players[id]) {
-                            players[id] = serverP;
-                        } else {
-                            // Lerp other players' positions and angles
-                            players[id].x += (serverP.x - players[id].x) * 0.2;
-                            players[id].y += (serverP.y - players[id].y) * 0.2;
-                            players[id].angle += (serverP.angle - players[id].angle) * 0.2;
-                            players[id].hp = serverP.hp;
-                            players[id].color = serverP.color;
-                        }
                     }
-                }
 
-                // Clean up disconnected players
-                for (let id in players) {
-                    if (!serverPlayers[id]) delete players[id];
+                    if (!renderPlayers[id]) {
+                        renderPlayers[id] = { x: sp.x, y: sp.y, angle: sp.angle, color: sp.color, hp: sp.hp };
+                    }
+                    players[id] = sp;
                 }
             } else if (pkt.type === "chat_message") {
                 chatBubbles[pkt.data.id] = {
@@ -118,7 +106,6 @@
             }
         });
 
-        // Chat UI Handling
         const chatInput = document.getElementById("chat-input");
         const chatContainer = document.getElementById("chat-container");
         const chatBtn = document.getElementById("chat-btn");
@@ -239,7 +226,7 @@
             if (now - lastShot < 200) return;
             lastShot = now;
 
-            socket.emit("RemoteEvent", { type: "shoot", data: { id: myId, angle: aimAngle } });
+            socket.emit("RemoteEvent", { type: "fire_bullet", data: { id: myId, angle: aimAngle } });
         }
 
         function update() {
@@ -248,18 +235,14 @@
                 const screenCenterY = canvas.height / 2;
                 aimAngle = Math.atan2(mousePos.y - screenCenterY, mousePos.x - screenCenterX);
 
-                let inputData = { id: myId, angle: aimAngle, up: false, down: false, left: false, right: false };
+                let inputData = { w: false, a: false, s: false, d: false };
                 if (isMobile) {
-                    inputData.vx = joyVector.x;
-                    inputData.vy = joyVector.y;
+                    inputData.vector = joyVector;
                 } else {
-                    inputData.up = keys.w;
-                    inputData.down = keys.s;
-                    inputData.left = keys.a;
-                    inputData.right = keys.d;
+                    inputData = { w: keys.w, a: keys.a, s: keys.s, d: keys.d };
                 }
 
-                socket.emit("RemoteEvent", { type: "player_input", data: inputData });
+                socket.emit("RemoteEvent", { type: "player_input", data: { id: myId, input: inputData, angle: aimAngle, color: myColor } });
             }
         }
 
@@ -290,40 +273,32 @@
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+            // Linear Interpolation (Lerp) for smooth rendering unaffected by network tick rate
+            for (let id in players) {
+                let sp = players[id];
+                if (!renderPlayers[id]) {
+                    renderPlayers[id] = { x: sp.x, y: sp.y, angle: sp.angle, color: sp.color, hp: sp.hp };
+                } else {
+                    renderPlayers[id].x += (sp.x - renderPlayers[id].x) * 0.25;
+                    renderPlayers[id].y += (sp.y - renderPlayers[id].y) * 0.25;
+                    renderPlayers[id].angle = sp.angle;
+                    renderPlayers[id].color = sp.color;
+                    renderPlayers[id].hp = sp.hp;
+                }
+            }
+
             ctx.save();
-            if (!isDead) {
-                ctx.translate(canvas.width / 2 - myPos.x, canvas.height / 2 - myPos.y);
+            if (!isDead && renderPlayers[myId]) {
+                ctx.translate(canvas.width / 2 - renderPlayers[myId].x, canvas.height / 2 - renderPlayers[myId].y);
             }
 
             ctx.strokeStyle = "#475569";
             ctx.lineWidth = 4;
             ctx.strokeRect(0, 0, 3000, 3000);
 
-            // Draw Self
-            if (!isDead) {
-                ctx.save();
-                ctx.translate(myPos.x, myPos.y);
-                ctx.fillStyle = myColor;
-                ctx.fillRect(-20, -20, 40, 40);
-
-                ctx.fillStyle = "#ef4444";
-                ctx.fillRect(-20, -32, 40, 6);
-                ctx.fillStyle = "#22c55e";
-                ctx.fillRect(-20, -32, 40 * (myHp / 100), 6);
-
-                ctx.rotate(aimAngle);
-                ctx.fillStyle = "#94a3b8";
-                ctx.fillRect(0, -6, 30, 12);
-                ctx.restore();
-
-                if (chatBubbles[myId] && chatBubbles[myId].expireTime > Date.now()) {
-                    drawBubble(myPos.x, myPos.y, chatBubbles[myId].text);
-                }
-            }
-
-            // Draw Other Players
-            for (let id in players) {
-                let p = players[id];
+            // Draw Players
+            for (let id in renderPlayers) {
+                let p = renderPlayers[id];
                 if (p.hp <= 0) continue;
 
                 ctx.save();
