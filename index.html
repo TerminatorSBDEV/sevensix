@@ -7,12 +7,14 @@
     <style>
         body { margin: 0; background: #0f172a; color: #fff; font-family: sans-serif; overflow: hidden; user-select: none; }
         canvas { display: block; background: #1e293b; }
-        #ui { position: absolute; top: 10px; left: 10px; pointer-events: none; font-weight: bold; font-size: 1.2rem; text-shadow: 1px 1px 2px #000; }
-        #joystick { position: absolute; bottom: 40px; left: 40px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; display: none; touch-action: none; }
+        #ui { position: absolute; top: 10px; left: 10px; pointer-events: none; font-weight: bold; font-size: 1.2rem; text-shadow: 1px 1px 2px #000; z-index: 10; }
+        #joystick { position: absolute; bottom: 40px; left: 40px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; display: none; touch-action: none; z-index: 10; }
         #stick { position: absolute; top: 35px; left: 35px; width: 50px; height: 50px; background: rgba(255,255,255,0.4); border-radius: 50%; pointer-events: none; }
         #chat-btn { position: absolute; bottom: 40px; right: 40px; width: 70px; height: 70px; background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.4); border-radius: 50%; display: none; align-items: center; justify-content: center; font-size: 1.5rem; cursor: pointer; z-index: 10; }
         #chat-container { position: absolute; bottom: 120px; left: 40px; display: none; z-index: 10; }
         #chat-input { width: 250px; padding: 10px; background: rgba(15, 23, 42, 0.9); border: 2px solid #38bdf8; color: #fff; border-radius: 8px; font-size: 1rem; outline: none; }
+        #minimap-container { position: absolute; top: 10px; right: 10px; width: 150px; height: 150px; background: rgba(15, 23, 42, 0.8); border: 2px solid #475569; border-radius: 8px; overflow: hidden; pointer-events: none; z-index: 10; }
+        #minimapCanvas { width: 100%; height: 100%; display: block; }
     </style>
 </head>
 <body>
@@ -22,11 +24,17 @@
     <div id="chat-container">
         <input type="text" id="chat-input" placeholder="Type a message..." maxlength="60" />
     </div>
+    <div id="minimap-container">
+        <canvas id="minimapCanvas" width="150" height="150"></canvas>
+    </div>
     <canvas id="gameCanvas"></canvas>
 
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
+
+        const minimapCanvas = document.getElementById("minimapCanvas");
+        const mCtx = minimapCanvas.getContext("2d");
 
         function resize() {
             canvas.width = window.innerWidth;
@@ -55,7 +63,7 @@
 
         const keys = { w: false, a: false, s: false, d: false };
         let players = {};
-        let renderPlayers = {}; // Interpolated positions for smooth rendering
+        let renderPlayers = {};
         let bullets = [];
         let chatBubbles = {};
 
@@ -229,6 +237,8 @@
             socket.emit("RemoteEvent", { type: "fire_bullet", data: { id: myId, angle: aimAngle } });
         }
 
+        // Throttle input networking to exactly 30 requests per second (~33.3ms)
+        let lastInputEmit = 0;
         function update() {
             if (!isDead && !chatOpen) {
                 const screenCenterX = canvas.width / 2;
@@ -242,7 +252,11 @@
                     inputData = { w: keys.w, a: keys.a, s: keys.s, d: keys.d };
                 }
 
-                socket.emit("RemoteEvent", { type: "player_input", data: { id: myId, input: inputData, angle: aimAngle, color: myColor } });
+                const now = Date.now();
+                if (now - lastInputEmit >= 1000 / 30) {
+                    lastInputEmit = now;
+                    socket.emit("RemoteEvent", { type: "player_input", data: { id: myId, input: inputData, angle: aimAngle, color: myColor } });
+                }
             }
         }
 
@@ -270,10 +284,35 @@
             ctx.restore();
         }
 
+        function drawMinimap() {
+            mCtx.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
+
+            // World bounds scale factor (Map size is 3000x3000, minimap is 150x150)
+            const scale = 150 / 3000;
+
+            // Draw world boundary box on minimap
+            mCtx.strokeStyle = "#475569";
+            mCtx.lineWidth = 1;
+            mCtx.strokeRect(0, 0, 150, 150);
+
+            // Draw all players on minimap
+            for (let id in renderPlayers) {
+                let p = renderPlayers[id];
+                if (p.hp <= 0) continue;
+
+                let mx = p.x * scale;
+                let my = p.y * scale;
+
+                mCtx.fillStyle = (id === myId) ? "#38bdf8" : (p.color || "#ef4444");
+                mCtx.beginPath();
+                mCtx.arc(mx, my, (id === myId) ? 3.5 : 2.5, 0, Math.PI * 2);
+                mCtx.fill();
+            }
+        }
+
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Linear Interpolation (Lerp) for smooth rendering unaffected by network tick rate
             for (let id in players) {
                 let sp = players[id];
                 if (!renderPlayers[id]) {
@@ -296,7 +335,6 @@
             ctx.lineWidth = 4;
             ctx.strokeRect(0, 0, 3000, 3000);
 
-            // Draw Players
             for (let id in renderPlayers) {
                 let p = renderPlayers[id];
                 if (p.hp <= 0) continue;
@@ -321,7 +359,6 @@
                 }
             }
 
-            // Draw Bullets
             ctx.fillStyle = "#facc15";
             bullets.forEach(b => {
                 ctx.beginPath();
@@ -330,6 +367,8 @@
             });
 
             ctx.restore();
+
+            drawMinimap();
         }
 
         function loop() {
