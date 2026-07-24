@@ -8,10 +8,19 @@
         body { margin: 0; background: #0f172a; color: #fff; font-family: sans-serif; overflow: hidden; user-select: none; }
         canvas { display: block; background: #1e293b; }
         #ui { position: absolute; top: 10px; left: 10px; pointer-events: none; font-weight: bold; font-size: 1.2rem; text-shadow: 1px 1px 2px #000; z-index: 10; }
+        #controls-hint { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); pointer-events: none; font-size: 0.9rem; color: rgba(255,255,255,0.7); background: rgba(15, 23, 42, 0.8); padding: 8px 16px; border-radius: 8px; border: 1px solid #475569; z-index: 10; text-align: center; }
         #joystick { position: absolute; bottom: 40px; left: 40px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; display: none; touch-action: none; z-index: 10; }
         #stick { position: absolute; top: 35px; left: 35px; width: 50px; height: 50px; background: rgba(255,255,255,0.4); border-radius: 50%; pointer-events: none; }
-        #chat-btn { position: absolute; bottom: 40px; right: 40px; width: 70px; height: 70px; background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.4); border-radius: 50%; display: none; align-items: center; justify-content: center; font-size: 1.5rem; cursor: pointer; z-index: 10; }
-        #build-btn { position: absolute; bottom: 40px; right: 130px; width: 70px; height: 70px; background: rgba(56, 189, 248, 0.2); border: 2px solid rgba(56, 189, 248, 0.5); border-radius: 50%; display: none; align-items: center; justify-content: center; font-size: 1.5rem; cursor: pointer; z-index: 10; }
+        #chat-btn { position: absolute; bottom: 40px; right: 40px; width: 60px; height: 60px; background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.4); border-radius: 50%; display: none; align-items: center; justify-content: center; font-size: 1.3rem; cursor: pointer; z-index: 10; }
+        #build-btn { position: absolute; bottom: 40px; right: 110px; width: 60px; height: 60px; background: rgba(56, 189, 248, 0.2); border: 2px solid rgba(56, 189, 248, 0.5); border-radius: 50%; display: none; align-items: center; justify-content: center; font-size: 1.3rem; cursor: pointer; z-index: 10; }
+        
+        /* Mobile Weapon Slot Buttons */
+        .mob-weapon-btn { position: absolute; bottom: 110px; width: 55px; height: 55px; background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.3); border-radius: 12px; display: none; align-items: center; justify-content: center; font-weight: bold; font-size: 1rem; cursor: pointer; z-index: 10; color: #fff; }
+        #mob-w1 { right: 40px; }
+        #mob-w2 { right: 105px; }
+        #mob-w3 { right: 170px; }
+        .mob-weapon-btn.active { background: rgba(56, 189, 248, 0.4); border-color: #38bdf8; }
+
         #chat-container { position: absolute; bottom: 120px; left: 40px; display: none; z-index: 10; }
         #chat-input { width: 250px; padding: 10px; background: rgba(15, 23, 42, 0.9); border: 2px solid #38bdf8; color: #fff; border-radius: 8px; font-size: 1rem; outline: none; }
         #minimap-container { position: absolute; top: 10px; right: 10px; width: 150px; height: 150px; background: rgba(15, 23, 42, 0.8); border: 2px solid #475569; border-radius: 8px; overflow: hidden; pointer-events: none; z-index: 10; }
@@ -19,10 +28,14 @@
     </style>
 </head>
 <body>
-    <div id="ui">Health: <span id="hp">100</span> | Status: <span id="status">Connecting...</span></div>
+    <div id="ui">Health: <span id="hp">100</span> | Weapon: <span id="wname">Rifle</span> | Status: <span id="status">Connecting...</span></div>
+    <div id="controls-hint">E to build walls | Y to chat | 1: Rifle, 2: SMG, 3: Sniper | WASD to move | Right Click to shoot</div>
     <div id="joystick"><div id="stick"></div></div>
     <div id="chat-btn">💬</div>
     <div id="build-btn">🧱</div>
+    <div id="mob-w1" class="mob-weapon-btn active">W1</div>
+    <div id="mob-w2" class="mob-weapon-btn">W2</div>
+    <div id="mob-w3" class="mob-weapon-btn">W3</div>
     <div id="chat-container">
         <input type="text" id="chat-input" placeholder="Type a message..." maxlength="60" />
     </div>
@@ -50,6 +63,10 @@
             document.getElementById("joystick").style.display = "block";
             document.getElementById("chat-btn").style.display = "flex";
             document.getElementById("build-btn").style.display = "flex";
+            document.getElementById("mob-w1").style.display = "flex";
+            document.getElementById("mob-w2").style.display = "flex";
+            document.getElementById("mob-w3").style.display = "flex";
+            document.getElementById("controls-hint").style.display = "none";
         }
 
         const link = "https://interim-preference-audience-duties.trycloudflare.com";
@@ -64,6 +81,14 @@
         let lastShot = 0;
         let lastBuild = 0;
         let aimAngle = 0;
+        let currentWeapon = 1; // 1: Rifle, 2: SMG, 3: Sniper
+        let isMouseDown = false;
+
+        const weaponStats = {
+            1: { name: "Rifle", rate: 200, speed: 22, damage: 15 },
+            2: { name: "SMG", rate: 50, speed: 18, damage: 7 }, // 18% slower proj speed than 22
+            3: { name: "Sniper", rate: 2500, speed: 31.46, damage: 50 } // 43% faster than 22
+        };
 
         const keys = { w: false, a: false, s: false, d: false };
         let players = {};
@@ -82,7 +107,7 @@
 
         socket.on("joined_successfully", () => {
             document.getElementById("status").innerText = "Connected";
-            socket.emit("RemoteEvent", { type: "player_join", data: { id: myId, color: myColor, x: myPos.x, y: myPos.y } });
+            socket.emit("RemoteEvent", { type: "player_join", data: { id: myId, color: myColor, x: myPos.x, y: myPos.y, weapon: currentWeapon } });
         });
 
         socket.on("RemoteEvent", (pkt) => {
@@ -108,7 +133,7 @@
                     }
 
                     if (!renderPlayers[id]) {
-                        renderPlayers[id] = { x: sp.x, y: sp.y, angle: sp.angle, color: sp.color, hp: sp.hp };
+                        renderPlayers[id] = { x: sp.x, y: sp.y, angle: sp.angle, color: sp.color, hp: sp.hp, weapon: sp.weapon || 1 };
                     }
                     players[id] = sp;
                 }
@@ -135,6 +160,16 @@
             }
         }
 
+        function setWeapon(wId) {
+            currentWeapon = wId;
+            document.getElementById("wname").innerText = weaponStats[wId].name;
+            if (isMobile) {
+                document.querySelectorAll(".mob-weapon-btn").forEach(btn => btn.classList.remove("active"));
+                document.getElementById(`mob-w${wId}`).classList.add("active");
+            }
+            socket.emit("RemoteEvent", { type: "switch_weapon", data: { id: myId, weapon: currentWeapon } });
+        }
+
         window.addEventListener("keydown", (e) => {
             if (e.key.toLowerCase() === 'y' && !chatOpen) {
                 e.preventDefault();
@@ -143,6 +178,10 @@
                 sendChat();
             } else if (e.key.toLowerCase() === 'e' && !chatOpen && !isDead) {
                 buildWall();
+            } else if (!chatOpen) {
+                if (e.key === '1') setWeapon(1);
+                if (e.key === '2') setWeapon(2);
+                if (e.key === '3') setWeapon(3);
             }
 
             if (!chatOpen) {
@@ -172,6 +211,10 @@
             }
         });
 
+        document.getElementById("mob-w1").addEventListener("click", () => setWeapon(1));
+        document.getElementById("mob-w2").addEventListener("click", () => setWeapon(2));
+        document.getElementById("mob-w3").addEventListener("click", () => setWeapon(3));
+
         function sendChat() {
             const text = chatInput.value.trim();
             if (text.length > 0) {
@@ -195,7 +238,13 @@
         window.addEventListener("mousedown", (e) => {
             if (chatOpen || isDead) return;
             if (e.button === 2) {
-                shoot();
+                isMouseDown = true;
+                tryShoot();
+            }
+        });
+        window.addEventListener("mouseup", (e) => {
+            if (e.button === 2) {
+                isMouseDown = false;
             }
         });
         window.addEventListener("contextmenu", (e) => e.preventDefault());
@@ -229,6 +278,7 @@
             if (joyActive) {
                 joyActive = false;
                 joyVector = { x: 0, y: 0 };
+                isMouseDown = false;
                 stickEl.style.transform = `translate(0px, 0px)`;
             }
         });
@@ -237,19 +287,25 @@
             if (isDead || chatOpen) return;
             const touch = e.touches[0];
             if (touch.clientX > window.innerWidth - 200 && touch.clientY > window.innerHeight - 120) return;
-            if (touch.clientX > 180 || touch.clientY < canvas.height - 180) {
+            if (touch.clientX > 220 || touch.clientY < canvas.height - 180) {
                 mousePos.x = touch.clientX;
                 mousePos.y = touch.clientY;
-                shoot();
+                isMouseDown = true;
+                tryShoot();
             }
         });
 
-        function shoot() {
+        window.addEventListener("touchend", (e) => {
+            isMouseDown = false;
+        });
+
+        function tryShoot() {
             const now = Date.now();
-            if (now - lastShot < 200) return;
+            const stat = weaponStats[currentWeapon];
+            if (now - lastShot < stat.rate) return;
             lastShot = now;
 
-            socket.emit("RemoteEvent", { type: "fire_bullet", data: { id: myId, angle: aimAngle } });
+            socket.emit("RemoteEvent", { type: "fire_bullet", data: { id: myId, angle: aimAngle, weapon: currentWeapon } });
         }
 
         function buildWall() {
@@ -267,6 +323,10 @@
                 const screenCenterY = canvas.height / 2;
                 aimAngle = Math.atan2(mousePos.y - screenCenterY, mousePos.x - screenCenterX);
 
+                if (isMouseDown) {
+                    tryShoot();
+                }
+
                 let inputData = { w: false, a: false, s: false, d: false };
                 if (isMobile) {
                     inputData.vector = joyVector;
@@ -277,7 +337,7 @@
                 const now = Date.now();
                 if (now - lastInputEmit >= 1000 / 50) {
                     lastInputEmit = now;
-                    socket.emit("RemoteEvent", { type: "player_input", data: { id: myId, input: inputData, angle: aimAngle, color: myColor } });
+                    socket.emit("RemoteEvent", { type: "player_input", data: { id: myId, input: inputData, angle: aimAngle, color: myColor, weapon: currentWeapon } });
                 }
             }
         }
@@ -340,26 +400,31 @@
             for (let id in players) {
                 let sp = players[id];
                 if (!renderPlayers[id]) {
-                    renderPlayers[id] = { x: sp.x, y: sp.y, angle: sp.angle, color: sp.color, hp: sp.hp };
+                    renderPlayers[id] = { x: sp.x, y: sp.y, angle: sp.angle, color: sp.color, hp: sp.hp, weapon: sp.weapon || 1 };
                 } else {
                     renderPlayers[id].x += (sp.x - renderPlayers[id].x) * 0.3;
                     renderPlayers[id].y += (sp.y - renderPlayers[id].y) * 0.3;
                     renderPlayers[id].angle = sp.angle;
                     renderPlayers[id].color = sp.color;
                     renderPlayers[id].hp = sp.hp;
+                    renderPlayers[id].weapon = sp.weapon || 1;
                 }
             }
 
             ctx.save();
             if (!isDead && renderPlayers[myId]) {
-                ctx.translate(canvas.width / 2 - renderPlayers[myId].x, canvas.height / 2 - renderPlayers[myId].y);
+                const isSniperActive = (currentWeapon === 3);
+                const zoomFactor = isSniperActive ? 0.5 : 1.0;
+                
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                ctx.scale(zoomFactor, zoomFactor);
+                ctx.translate(-renderPlayers[myId].x, -renderPlayers[myId].y);
             }
 
             ctx.strokeStyle = "#475569";
             ctx.lineWidth = 4;
             ctx.strokeRect(0, 0, 3000, 3000);
 
-            // Draw Walls (Longer length: 120 width, vertical orientation relative to look direction -> rotated + 90 deg)
             walls.forEach(w => {
                 ctx.save();
                 ctx.translate(w.x, w.y);
@@ -387,9 +452,43 @@
                 ctx.fillRect(-20, -32, 40 * (p.hp / 100), 6);
 
                 ctx.rotate(p.angle);
-                ctx.fillStyle = "#94a3b8";
-                ctx.fillRect(0, -6, 30, 12);
+                
+                // Render Unique Weapon Models
+                const wType = p.weapon;
+                if (wType === 1) {
+                    // Rifle Model
+                    ctx.fillStyle = "#64748b";
+                    ctx.fillRect(5, -5, 34, 10);
+                    ctx.fillStyle = "#334155";
+                    ctx.fillRect(8, -8, 14, 4);
+                } else if (wType === 2) {
+                    // SMG Model (shorter, boxy)
+                    ctx.fillStyle = "#475569";
+                    ctx.fillRect(4, -4, 22, 8);
+                    ctx.fillStyle = "#1e293b";
+                    ctx.fillRect(10, -7, 8, 4);
+                } else if (wType === 3) {
+                    // Sniper Model (long barrel, scope)
+                    ctx.fillStyle = "#334155";
+                    ctx.fillRect(2, -4, 45, 8);
+                    ctx.fillStyle = "#ef4444";
+                    ctx.fillRect(15, -9, 10, 5); // Scope
+                }
+
                 ctx.restore();
+
+                // Sniper Laser Sight (Client-side helper for the local player only)
+                if (id === myId && currentWeapon === 3 && !isDead) {
+                    ctx.save();
+                    ctx.strokeStyle = "rgba(239, 68, 68, 0.7)";
+                    ctx.lineWidth = 1.5;
+                    ctx.setLineDash([4, 4]);
+                    ctx.beginPath();
+                    ctx.moveTo(p.x, p.y);
+                    ctx.lineTo(p.x + Math.cos(p.angle) * 1200, p.y + Math.sin(p.angle) * 1200);
+                    ctx.stroke();
+                    ctx.restore();
+                }
 
                 if (chatBubbles[id] && chatBubbles[id].expireTime > Date.now()) {
                     drawBubble(p.x, p.y, chatBubbles[id].text);
