@@ -11,6 +11,7 @@
         #joystick { position: absolute; bottom: 40px; left: 40px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; display: none; touch-action: none; z-index: 10; }
         #stick { position: absolute; top: 35px; left: 35px; width: 50px; height: 50px; background: rgba(255,255,255,0.4); border-radius: 50%; pointer-events: none; }
         #chat-btn { position: absolute; bottom: 40px; right: 40px; width: 70px; height: 70px; background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.4); border-radius: 50%; display: none; align-items: center; justify-content: center; font-size: 1.5rem; cursor: pointer; z-index: 10; }
+        #build-btn { position: absolute; bottom: 40px; right: 130px; width: 70px; height: 70px; background: rgba(56, 189, 248, 0.2); border: 2px solid rgba(56, 189, 248, 0.5); border-radius: 50%; display: none; align-items: center; justify-content: center; font-size: 1.5rem; cursor: pointer; z-index: 10; }
         #chat-container { position: absolute; bottom: 120px; left: 40px; display: none; z-index: 10; }
         #chat-input { width: 250px; padding: 10px; background: rgba(15, 23, 42, 0.9); border: 2px solid #38bdf8; color: #fff; border-radius: 8px; font-size: 1rem; outline: none; }
         #minimap-container { position: absolute; top: 10px; right: 10px; width: 150px; height: 150px; background: rgba(15, 23, 42, 0.8); border: 2px solid #475569; border-radius: 8px; overflow: hidden; pointer-events: none; z-index: 10; }
@@ -21,6 +22,7 @@
     <div id="ui">Health: <span id="hp">100</span> | Status: <span id="status">Connecting...</span></div>
     <div id="joystick"><div id="stick"></div></div>
     <div id="chat-btn">💬</div>
+    <div id="build-btn">🧱</div>
     <div id="chat-container">
         <input type="text" id="chat-input" placeholder="Type a message..." maxlength="60" />
     </div>
@@ -47,6 +49,7 @@
         if (isMobile) {
             document.getElementById("joystick").style.display = "block";
             document.getElementById("chat-btn").style.display = "flex";
+            document.getElementById("build-btn").style.display = "flex";
         }
 
         const link = "https://interim-preference-audience-duties.trycloudflare.com";
@@ -59,12 +62,14 @@
         let myHp = 100;
         let isDead = false;
         let lastShot = 0;
+        let lastBuild = 0;
         let aimAngle = 0;
 
         const keys = { w: false, a: false, s: false, d: false };
         let players = {};
         let renderPlayers = {};
         let bullets = [];
+        let walls = [];
         let chatBubbles = {};
 
         let joyActive = false;
@@ -84,6 +89,7 @@
             if (pkt.type === "state_update") {
                 const serverPlayers = pkt.data.players;
                 bullets = pkt.data.bullets || [];
+                walls = pkt.data.walls || [];
 
                 for (let id in serverPlayers) {
                     const sp = serverPlayers[id];
@@ -117,6 +123,7 @@
         const chatInput = document.getElementById("chat-input");
         const chatContainer = document.getElementById("chat-container");
         const chatBtn = document.getElementById("chat-btn");
+        const buildBtn = document.getElementById("build-btn");
 
         function toggleChat() {
             chatOpen = !chatOpen;
@@ -134,6 +141,8 @@
                 toggleChat();
             } else if (e.key === 'Enter' && chatOpen) {
                 sendChat();
+            } else if (e.key.toLowerCase() === 'e' && !chatOpen && !isDead) {
+                buildWall();
             }
 
             if (!chatOpen) {
@@ -155,6 +164,12 @@
 
         chatBtn.addEventListener("click", () => {
             toggleChat();
+        });
+
+        buildBtn.addEventListener("click", () => {
+            if (!isDead && !chatOpen) {
+                buildWall();
+            }
         });
 
         function sendChat() {
@@ -221,7 +236,7 @@
         window.addEventListener("touchstart", (e) => {
             if (isDead || chatOpen) return;
             const touch = e.touches[0];
-            if (touch.clientX > window.innerWidth - 120 && touch.clientY > window.innerHeight - 120) return;
+            if (touch.clientX > window.innerWidth - 200 && touch.clientY > window.innerHeight - 120) return;
             if (touch.clientX > 180 || touch.clientY < canvas.height - 180) {
                 mousePos.x = touch.clientX;
                 mousePos.y = touch.clientY;
@@ -237,7 +252,15 @@
             socket.emit("RemoteEvent", { type: "fire_bullet", data: { id: myId, angle: aimAngle } });
         }
 
-        // Throttle input networking to exactly 30 requests per second (~33.3ms)
+        function buildWall() {
+            const now = Date.now();
+            if (now - lastBuild < 1000) return;
+            lastBuild = now;
+
+            socket.emit("RemoteEvent", { type: "build_wall", data: { id: myId, angle: aimAngle } });
+        }
+
+        // Throttle input networking to exactly 50 requests per second (20ms)
         let lastInputEmit = 0;
         function update() {
             if (!isDead && !chatOpen) {
@@ -253,7 +276,7 @@
                 }
 
                 const now = Date.now();
-                if (now - lastInputEmit >= 1000 / 30) {
+                if (now - lastInputEmit >= 1000 / 50) {
                     lastInputEmit = now;
                     socket.emit("RemoteEvent", { type: "player_input", data: { id: myId, input: inputData, angle: aimAngle, color: myColor } });
                 }
@@ -287,15 +310,18 @@
         function drawMinimap() {
             mCtx.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
 
-            // World bounds scale factor (Map size is 3000x3000, minimap is 150x150)
             const scale = 150 / 3000;
 
-            // Draw world boundary box on minimap
             mCtx.strokeStyle = "#475569";
             mCtx.lineWidth = 1;
             mCtx.strokeRect(0, 0, 150, 150);
 
-            // Draw all players on minimap
+            // Draw walls on minimap
+            mCtx.fillStyle = "#64748b";
+            walls.forEach(w => {
+                mCtx.fillRect(w.x * scale - 1, w.y * scale - 1, 2, 2);
+            });
+
             for (let id in renderPlayers) {
                 let p = renderPlayers[id];
                 if (p.hp <= 0) continue;
@@ -318,8 +344,9 @@
                 if (!renderPlayers[id]) {
                     renderPlayers[id] = { x: sp.x, y: sp.y, angle: sp.angle, color: sp.color, hp: sp.hp };
                 } else {
-                    renderPlayers[id].x += (sp.x - renderPlayers[id].x) * 0.25;
-                    renderPlayers[id].y += (sp.y - renderPlayers[id].y) * 0.25;
+                    // Strict linear interpolation
+                    renderPlayers[id].x += (sp.x - renderPlayers[id].x) * 0.3;
+                    renderPlayers[id].y += (sp.y - renderPlayers[id].y) * 0.3;
                     renderPlayers[id].angle = sp.angle;
                     renderPlayers[id].color = sp.color;
                     renderPlayers[id].hp = sp.hp;
@@ -334,6 +361,19 @@
             ctx.strokeStyle = "#475569";
             ctx.lineWidth = 4;
             ctx.strokeRect(0, 0, 3000, 3000);
+
+            // Draw Walls
+            walls.forEach(w => {
+                ctx.save();
+                ctx.translate(w.x, w.y);
+                ctx.rotate(w.angle);
+                ctx.fillStyle = "#334155";
+                ctx.strokeStyle = "#94a3b8";
+                ctx.lineWidth = 2;
+                ctx.fillRect(-35, -10, 70, 20);
+                ctx.strokeRect(-35, -10, 70, 20);
+                ctx.restore();
+            });
 
             for (let id in renderPlayers) {
                 let p = renderPlayers[id];
