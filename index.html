@@ -10,18 +10,11 @@
         #ui { position: absolute; top: 10px; left: 10px; pointer-events: none; font-weight: bold; font-size: 1.2rem; text-shadow: 1px 1px 2px #000; }
         #joystick { position: absolute; bottom: 40px; left: 40px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; display: none; touch-action: none; }
         #stick { position: absolute; top: 35px; left: 35px; width: 50px; height: 50px; background: rgba(255,255,255,0.4); border-radius: 50%; pointer-events: none; }
-        #chat-btn { position: absolute; bottom: 40px; right: 40px; width: 70px; height: 70px; background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.4); border-radius: 50%; display: none; align-items: center; justify-content: center; font-size: 1.5rem; cursor: pointer; z-index: 10; }
-        #chat-container { position: absolute; bottom: 120px; left: 40px; display: none; z-index: 10; }
-        #chat-input { width: 250px; padding: 10px; background: rgba(15, 23, 42, 0.9); border: 2px solid #38bdf8; color: #fff; border-radius: 8px; font-size: 1rem; outline: none; }
     </style>
 </head>
 <body>
     <div id="ui">Health: <span id="hp">100</span> | Status: <span id="status">Connecting...</span></div>
     <div id="joystick"><div id="stick"></div></div>
-    <div id="chat-btn">💬</div>
-    <div id="chat-container">
-        <input type="text" id="chat-input" placeholder="Type a message..." maxlength="60" />
-    </div>
     <canvas id="gameCanvas"></canvas>
 
     <script>
@@ -38,7 +31,6 @@
         const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
         if (isMobile) {
             document.getElementById("joystick").style.display = "block";
-            document.getElementById("chat-btn").style.display = "flex";
         }
 
         const link = "https://anyway-accessory-initiated-creating.trycloudflare.com";
@@ -56,11 +48,9 @@
         const keys = { w: false, a: false, s: false, d: false };
         let players = {};
         let bullets = [];
-        let chatBubbles = {}; // id -> { text, expireTime }
 
         let joyActive = false;
         let joyVector = { x: 0, y: 0 };
-        let chatOpen = false;
 
         socket.on("connect", () => {
             socket.emit("join_virtual_server", { key });
@@ -94,81 +84,31 @@
                 if (pkt.data.shooterId !== myId) {
                     bullets.push(pkt.data);
                 }
-            } else if (pkt.type === "chat_message") {
-                chatBubbles[pkt.data.id] = {
-                    text: pkt.data.text,
-                    expireTime: Date.now() + 4000
-                };
             }
         });
 
-        // Chat UI Handling
-        const chatInput = document.getElementById("chat-input");
-        const chatContainer = document.getElementById("chat-container");
-        const chatBtn = document.getElementById("chat-btn");
-
-        function toggleChat() {
-            chatOpen = !chatOpen;
-            chatContainer.style.display = chatOpen ? "block" : "none";
-            if (chatOpen) {
-                chatInput.focus();
-            } else {
-                chatInput.blur();
-            }
-        }
-
         window.addEventListener("keydown", (e) => {
-            if (e.key.toLowerCase() === 'y' && !chatOpen) {
-                e.preventDefault();
-                toggleChat();
-            } else if (e.key === 'Enter' && chatOpen) {
-                sendChat();
-            }
-
-            if (!chatOpen) {
-                if (e.key.toLowerCase() === 'w') keys.w = true;
-                if (e.key.toLowerCase() === 'a') keys.a = true;
-                if (e.key.toLowerCase() === 's') keys.s = true;
-                if (e.key.toLowerCase() === 'd') keys.d = true;
-            }
+            if (e.key.toLowerCase() === 'w') keys.w = true;
+            if (e.key.toLowerCase() === 'a') keys.a = true;
+            if (e.key.toLowerCase() === 's') keys.s = true;
+            if (e.key.toLowerCase() === 'd') keys.d = true;
         });
 
         window.addEventListener("keyup", (e) => {
-            if (!chatOpen) {
-                if (e.key.toLowerCase() === 'w') keys.w = false;
-                if (e.key.toLowerCase() === 'a') keys.a = false;
-                if (e.key.toLowerCase() === 's') keys.s = false;
-                if (e.key.toLowerCase() === 'd') keys.d = false;
-            }
+            if (e.key.toLowerCase() === 'w') keys.w = false;
+            if (e.key.toLowerCase() === 'a') keys.a = false;
+            if (e.key.toLowerCase() === 's') keys.s = false;
+            if (e.key.toLowerCase() === 'd') keys.d = false;
         });
-
-        chatBtn.addEventListener("click", () => {
-            toggleChat();
-        });
-
-        function sendChat() {
-            const text = chatInput.value.trim();
-            if (text.length > 0) {
-                socket.emit("RemoteEvent", { type: "send_chat", data: { id: myId, text } });
-                chatBubbles[myId] = {
-                    text: text,
-                    expireTime: Date.now() + 4000
-                };
-            }
-            chatInput.value = "";
-            toggleChat();
-        }
 
         let mousePos = { x: canvas.width / 2, y: canvas.height / 2 };
         window.addEventListener("mousemove", (e) => {
-            if (chatOpen) return;
             mousePos.x = e.clientX;
             mousePos.y = e.clientY;
         });
 
         window.addEventListener("mousedown", (e) => {
-            if (chatOpen || isDead) return;
-            if (e.button === 2) {
+            if (e.button === 2 && !isDead) {
                 shoot();
             }
         });
@@ -179,14 +119,13 @@
         let joyCenter = { x: 0, y: 0 };
 
         joystickEl.addEventListener("touchstart", (e) => {
-            if (chatOpen) return;
             joyActive = true;
             const rect = joystickEl.getBoundingClientRect();
             joyCenter = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
         });
 
         window.addEventListener("touchmove", (e) => {
-            if (!joyActive || chatOpen) return;
+            if (!joyActive) return;
             const touch = e.touches[0];
             const dx = touch.clientX - joyCenter.x;
             const dy = touch.clientY - joyCenter.y;
@@ -208,10 +147,8 @@
         });
 
         window.addEventListener("touchstart", (e) => {
-            if (isDead || chatOpen) return;
+            if (isDead) return;
             const touch = e.touches[0];
-            // Ignore touch if interacting with chat button or container
-            if (touch.clientX > window.innerWidth - 120 && touch.clientY > window.innerHeight - 120) return;
             if (touch.clientX > 180 || touch.clientY < canvas.height - 180) {
                 mousePos.x = touch.clientX;
                 mousePos.y = touch.clientY;
@@ -238,7 +175,7 @@
         }
 
         function update() {
-            if (!isDead && !chatOpen) {
+            if (!isDead) {
                 let speed = 4;
                 if (isMobile) {
                     myPos.x += joyVector.x * speed;
@@ -283,30 +220,6 @@
             }
         }
 
-        function drawBubble(x, y, text) {
-            ctx.save();
-            ctx.font = "14px sans-serif";
-            const metrics = ctx.measureText(text);
-            const w = metrics.width + 16;
-            const h = 28;
-
-            ctx.translate(x, y - 55);
-            ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
-            ctx.strokeStyle = "#38bdf8";
-            ctx.lineWidth = 2;
-            
-            ctx.beginPath();
-            ctx.roundRect(-w / 2, -h / 2, w, h, 6);
-            ctx.fill();
-            ctx.stroke();
-
-            ctx.fillStyle = "#fff";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            ctx.fillText(text, 0, 0);
-            ctx.restore();
-        }
-
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -319,7 +232,6 @@
             ctx.lineWidth = 4;
             ctx.strokeRect(0, 0, 3000, 3000);
 
-            // Draw Self
             if (!isDead) {
                 ctx.save();
                 ctx.translate(myPos.x, myPos.y);
@@ -335,13 +247,8 @@
                 ctx.fillStyle = "#94a3b8";
                 ctx.fillRect(0, -6, 30, 12);
                 ctx.restore();
-
-                if (chatBubbles[myId] && chatBubbles[myId].expireTime > Date.now()) {
-                    drawBubble(myPos.x, myPos.y, chatBubbles[myId].text);
-                }
             }
 
-            // Draw Other Players
             for (let id in players) {
                 let p = players[id];
                 if (p.hp <= 0) continue;
@@ -360,13 +267,8 @@
                 ctx.fillStyle = "#94a3b8";
                 ctx.fillRect(0, -6, 30, 12);
                 ctx.restore();
-
-                if (chatBubbles[id] && chatBubbles[id].expireTime > Date.now()) {
-                    drawBubble(p.x, p.y, chatBubbles[id].text);
-                }
             }
 
-            // Draw Bullets
             ctx.fillStyle = "#facc15";
             bullets.forEach(b => {
                 ctx.beginPath();
