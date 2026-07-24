@@ -10,11 +10,18 @@
         #ui { position: absolute; top: 10px; left: 10px; pointer-events: none; font-weight: bold; font-size: 1.2rem; text-shadow: 1px 1px 2px #000; }
         #joystick { position: absolute; bottom: 40px; left: 40px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; display: none; touch-action: none; }
         #stick { position: absolute; top: 35px; left: 35px; width: 50px; height: 50px; background: rgba(255,255,255,0.4); border-radius: 50%; pointer-events: none; }
+        #chat-btn { position: absolute; bottom: 40px; right: 40px; width: 70px; height: 70px; background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.4); border-radius: 50%; display: none; align-items: center; justify-content: center; font-size: 1.5rem; cursor: pointer; z-index: 10; }
+        #chat-container { position: absolute; bottom: 120px; left: 40px; display: none; z-index: 10; }
+        #chat-input { width: 250px; padding: 10px; background: rgba(15, 23, 42, 0.9); border: 2px solid #38bdf8; color: #fff; border-radius: 8px; font-size: 1rem; outline: none; }
     </style>
 </head>
 <body>
     <div id="ui">Health: <span id="hp">100</span> | Status: <span id="status">Connecting...</span></div>
     <div id="joystick"><div id="stick"></div></div>
+    <div id="chat-btn">💬</div>
+    <div id="chat-container">
+        <input type="text" id="chat-input" placeholder="Type a message..." maxlength="60" />
+    </div>
     <canvas id="gameCanvas"></canvas>
 
     <script>
@@ -31,6 +38,7 @@
         const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
         if (isMobile) {
             document.getElementById("joystick").style.display = "block";
+            document.getElementById("chat-btn").style.display = "flex";
         }
 
         const link = "https://interim-preference-audience-duties.trycloudflare.com";
@@ -39,7 +47,7 @@
 
         let myId = Math.random().toString(36).substring(2, 7);
         let myColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
-        let myPos = { x: Math.random() * 1500, y: Math.random() * 1500 };
+        let myPos = { x: 1500, y: 1500 };
         let myHp = 100;
         let isDead = false;
         let lastShot = 0;
@@ -48,9 +56,11 @@
         const keys = { w: false, a: false, s: false, d: false };
         let players = {};
         let bullets = [];
+        let chatBubbles = {};
 
         let joyActive = false;
         let joyVector = { x: 0, y: 0 };
+        let chatOpen = false;
 
         socket.on("connect", () => {
             socket.emit("join_virtual_server", { key });
@@ -58,57 +68,123 @@
 
         socket.on("joined_successfully", () => {
             document.getElementById("status").innerText = "Connected";
-            socket.emit("RemoteEvent", { type: "player_join", data: { id: myId, color: myColor, x: myPos.x, y: myPos.y } });
+            socket.emit("RemoteEvent", { type: "player_join", data: { id: myId, color: myColor } });
         });
 
         socket.on("RemoteEvent", (pkt) => {
             if (pkt.type === "state_update") {
                 const serverPlayers = pkt.data.players;
+                bullets = pkt.data.bullets || [];
+
                 for (let id in serverPlayers) {
+                    let serverP = serverPlayers[id];
                     if (id === myId) {
-                        myHp = serverPlayers[id].hp;
+                        myHp = serverP.hp;
                         document.getElementById("hp").innerText = myHp;
+                        // Lerp local position towards server-calculated position for smooth correction
+                        myPos.x += (serverP.x - myPos.x) * 0.2;
+                        myPos.y += (serverP.y - myPos.y) * 0.2;
+
                         if (myHp <= 0 && !isDead) {
                             isDead = true;
                             setTimeout(() => {
                                 isDead = false;
-                                myPos = { x: Math.random() * 1500, y: Math.random() * 1500 };
-                                socket.emit("RemoteEvent", { type: "respawn", data: { id: myId, x: myPos.x, y: myPos.y } });
+                                socket.emit("RemoteEvent", { type: "respawn", data: { id: myId } });
                             }, 3000);
                         }
                     } else {
-                        players[id] = serverPlayers[id];
+                        if (!players[id]) {
+                            players[id] = serverP;
+                        } else {
+                            // Lerp other players' positions and angles
+                            players[id].x += (serverP.x - players[id].x) * 0.2;
+                            players[id].y += (serverP.y - players[id].y) * 0.2;
+                            players[id].angle += (serverP.angle - players[id].angle) * 0.2;
+                            players[id].hp = serverP.hp;
+                            players[id].color = serverP.color;
+                        }
                     }
                 }
-            } else if (pkt.type === "spawn_bullet") {
-                if (pkt.data.shooterId !== myId) {
-                    bullets.push(pkt.data);
+
+                // Clean up disconnected players
+                for (let id in players) {
+                    if (!serverPlayers[id]) delete players[id];
                 }
+            } else if (pkt.type === "chat_message") {
+                chatBubbles[pkt.data.id] = {
+                    text: pkt.data.text,
+                    expireTime: Date.now() + 4000
+                };
             }
         });
 
+        // Chat UI Handling
+        const chatInput = document.getElementById("chat-input");
+        const chatContainer = document.getElementById("chat-container");
+        const chatBtn = document.getElementById("chat-btn");
+
+        function toggleChat() {
+            chatOpen = !chatOpen;
+            chatContainer.style.display = chatOpen ? "block" : "none";
+            if (chatOpen) {
+                chatInput.focus();
+            } else {
+                chatInput.blur();
+            }
+        }
+
         window.addEventListener("keydown", (e) => {
-            if (e.key.toLowerCase() === 'w') keys.w = true;
-            if (e.key.toLowerCase() === 'a') keys.a = true;
-            if (e.key.toLowerCase() === 's') keys.s = true;
-            if (e.key.toLowerCase() === 'd') keys.d = true;
+            if (e.key.toLowerCase() === 'y' && !chatOpen) {
+                e.preventDefault();
+                toggleChat();
+            } else if (e.key === 'Enter' && chatOpen) {
+                sendChat();
+            }
+
+            if (!chatOpen) {
+                if (e.key.toLowerCase() === 'w') keys.w = true;
+                if (e.key.toLowerCase() === 'a') keys.a = true;
+                if (e.key.toLowerCase() === 's') keys.s = true;
+                if (e.key.toLowerCase() === 'd') keys.d = true;
+            }
         });
 
         window.addEventListener("keyup", (e) => {
-            if (e.key.toLowerCase() === 'w') keys.w = false;
-            if (e.key.toLowerCase() === 'a') keys.a = false;
-            if (e.key.toLowerCase() === 's') keys.s = false;
-            if (e.key.toLowerCase() === 'd') keys.d = false;
+            if (!chatOpen) {
+                if (e.key.toLowerCase() === 'w') keys.w = false;
+                if (e.key.toLowerCase() === 'a') keys.a = false;
+                if (e.key.toLowerCase() === 's') keys.s = false;
+                if (e.key.toLowerCase() === 'd') keys.d = false;
+            }
         });
+
+        chatBtn.addEventListener("click", () => {
+            toggleChat();
+        });
+
+        function sendChat() {
+            const text = chatInput.value.trim();
+            if (text.length > 0) {
+                socket.emit("RemoteEvent", { type: "send_chat", data: { id: myId, text } });
+                chatBubbles[myId] = {
+                    text: text,
+                    expireTime: Date.now() + 4000
+                };
+            }
+            chatInput.value = "";
+            toggleChat();
+        }
 
         let mousePos = { x: canvas.width / 2, y: canvas.height / 2 };
         window.addEventListener("mousemove", (e) => {
+            if (chatOpen) return;
             mousePos.x = e.clientX;
             mousePos.y = e.clientY;
         });
 
         window.addEventListener("mousedown", (e) => {
-            if (e.button === 2 && !isDead) {
+            if (chatOpen || isDead) return;
+            if (e.button === 2) {
                 shoot();
             }
         });
@@ -119,13 +195,14 @@
         let joyCenter = { x: 0, y: 0 };
 
         joystickEl.addEventListener("touchstart", (e) => {
+            if (chatOpen) return;
             joyActive = true;
             const rect = joystickEl.getBoundingClientRect();
             joyCenter = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
         });
 
         window.addEventListener("touchmove", (e) => {
-            if (!joyActive) return;
+            if (!joyActive || chatOpen) return;
             const touch = e.touches[0];
             const dx = touch.clientX - joyCenter.x;
             const dy = touch.clientY - joyCenter.y;
@@ -147,8 +224,9 @@
         });
 
         window.addEventListener("touchstart", (e) => {
-            if (isDead) return;
+            if (isDead || chatOpen) return;
             const touch = e.touches[0];
+            if (touch.clientX > window.innerWidth - 120 && touch.clientY > window.innerHeight - 120) return;
             if (touch.clientX > 180 || touch.clientY < canvas.height - 180) {
                 mousePos.x = touch.clientX;
                 mousePos.y = touch.clientY;
@@ -161,63 +239,52 @@
             if (now - lastShot < 200) return;
             lastShot = now;
 
-            const bullet = {
-                x: myPos.x,
-                y: myPos.y,
-                vx: Math.cos(aimAngle) * 12,
-                vy: Math.sin(aimAngle) * 12,
-                damage: 13,
-                shooterId: myId
-            };
-
-            bullets.push(bullet);
-            socket.emit("RemoteEvent", { type: "fire_bullet", data: bullet });
+            socket.emit("RemoteEvent", { type: "shoot", data: { id: myId, angle: aimAngle } });
         }
 
         function update() {
-            if (!isDead) {
-                let speed = 4;
-                if (isMobile) {
-                    myPos.x += joyVector.x * speed;
-                    myPos.y += joyVector.y * speed;
-                } else {
-                    if (keys.w) myPos.y -= speed;
-                    if (keys.s) myPos.y += speed;
-                    if (keys.a) myPos.x -= speed;
-                    if (keys.d) myPos.x += speed;
-                }
-
-                myPos.x = Math.max(0, Math.min(3000, myPos.x));
-                myPos.y = Math.max(0, Math.min(3000, myPos.y));
-
+            if (!isDead && !chatOpen) {
                 const screenCenterX = canvas.width / 2;
                 const screenCenterY = canvas.height / 2;
                 aimAngle = Math.atan2(mousePos.y - screenCenterY, mousePos.x - screenCenterX);
 
-                socket.emit("RemoteEvent", { type: "player_update", data: { id: myId, x: myPos.x, y: myPos.y, angle: aimAngle, color: myColor } });
-            }
-
-            for (let i = bullets.length - 1; i >= 0; i--) {
-                let b = bullets[i];
-                b.x += b.vx;
-                b.y += b.vy;
-
-                if (b.x < 0 || b.x > 3000 || b.y < 0 || b.y > 3000) {
-                    bullets.splice(i, 1);
-                    continue;
+                let inputData = { id: myId, angle: aimAngle, up: false, down: false, left: false, right: false };
+                if (isMobile) {
+                    inputData.vx = joyVector.x;
+                    inputData.vy = joyVector.y;
+                } else {
+                    inputData.up = keys.w;
+                    inputData.down = keys.s;
+                    inputData.left = keys.a;
+                    inputData.right = keys.d;
                 }
 
-                if (b.shooterId === myId) {
-                    for (let id in players) {
-                        let p = players[id];
-                        if (p.hp > 0 && Math.abs(p.x - b.x) < 25 && Math.abs(p.y - b.y) < 25) {
-                            socket.emit("RemoteEvent", { type: "apply_damage", data: { targetId: id, damage: b.damage } });
-                            bullets.splice(i, 1);
-                            break;
-                        }
-                    }
-                }
+                socket.emit("RemoteEvent", { type: "player_input", data: inputData });
             }
+        }
+
+        function drawBubble(x, y, text) {
+            ctx.save();
+            ctx.font = "14px sans-serif";
+            const metrics = ctx.measureText(text);
+            const w = metrics.width + 16;
+            const h = 28;
+
+            ctx.translate(x, y - 55);
+            ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
+            ctx.strokeStyle = "#38bdf8";
+            ctx.lineWidth = 2;
+            
+            ctx.beginPath();
+            ctx.roundRect(-w / 2, -h / 2, w, h, 6);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = "#fff";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(text, 0, 0);
+            ctx.restore();
         }
 
         function draw() {
@@ -232,6 +299,7 @@
             ctx.lineWidth = 4;
             ctx.strokeRect(0, 0, 3000, 3000);
 
+            // Draw Self
             if (!isDead) {
                 ctx.save();
                 ctx.translate(myPos.x, myPos.y);
@@ -247,8 +315,13 @@
                 ctx.fillStyle = "#94a3b8";
                 ctx.fillRect(0, -6, 30, 12);
                 ctx.restore();
+
+                if (chatBubbles[myId] && chatBubbles[myId].expireTime > Date.now()) {
+                    drawBubble(myPos.x, myPos.y, chatBubbles[myId].text);
+                }
             }
 
+            // Draw Other Players
             for (let id in players) {
                 let p = players[id];
                 if (p.hp <= 0) continue;
@@ -267,8 +340,13 @@
                 ctx.fillStyle = "#94a3b8";
                 ctx.fillRect(0, -6, 30, 12);
                 ctx.restore();
+
+                if (chatBubbles[id] && chatBubbles[id].expireTime > Date.now()) {
+                    drawBubble(p.x, p.y, chatBubbles[id].text);
+                }
             }
 
+            // Draw Bullets
             ctx.fillStyle = "#facc15";
             bullets.forEach(b => {
                 ctx.beginPath();
